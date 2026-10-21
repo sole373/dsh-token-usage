@@ -8,9 +8,9 @@
   "packageManager": "pnpm@11.7.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dsh-market/dsh-token-usage"
+    "url": "https://github.com/sole373/dsh-token-usage"
   },
-  "homepage": "https://github.com/dsh-market/dsh-token-usage#readme",
+  "homepage": "https://github.com/sole373/dsh-token-usage#readme",
   "keywords": [
     "dsh-plugin",
     "dsh",
