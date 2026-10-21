@@ -1,0 +1,67 @@
+{
+  "name": "dsh-token-usage",
+  "displayName": "dsh-token-usage",
+  "description": "Token usage analytics for DeepSeek Harness: scans the host's own session logs and reports consumption by provider and model, cache hit rates, daily trends and a capability leaderboard for the models you actually use.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dsh-market/dsh-token-usage"
+  },
+  "homepage": "https://github.com/dsh-market/dsh-token-usage#readme",
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "token",
+    "usage",
+    "analytics",
+    "cache",
+    "leaderboard"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "lib/index.js",
+  "icon": "icons/dsh-token-usage.svg",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./icon": "./icons/dsh-token-usage.svg",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.18.4"
+  },
+  "files": [
+    "lib",
+    "icons",
+    "locale",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1-rc.1 <5.0.0 || >=4.0.2 <5.0.0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.7-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": ">=3.18.1-rc.1 <4.0.0 || >=3.18.2 <4.0.0"
+  }
+}

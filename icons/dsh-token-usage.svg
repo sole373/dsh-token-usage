@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Token Usage">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#4338ca"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <!-- 坐标轴：用量图 -->
+  <path d="M26 30 V98 H104" fill="none" stroke="#ffffff" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.75"/>
+  <!-- 柱状：每日消耗趋势 -->
+  <rect x="40" y="70" width="14" height="28" rx="4" fill="#ffffff" opacity="0.9"/>
+  <rect x="61" y="54" width="14" height="44" rx="4" fill="#ffffff" opacity="0.9"/>
+  <rect x="82" y="40" width="14" height="58" rx="4" fill="#ffffff"/>
+  <!-- 趋势折线：越过柱顶的那条线 -->
+  <path d="M47 62 L68 46 L89 30" fill="none" stroke="#ffffff" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+  <circle cx="89" cy="30" r="6" fill="#ffffff"/>
+</svg>

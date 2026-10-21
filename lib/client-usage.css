@@ -1,0 +1,253 @@
+/* Token 用量统计页 + 输入框余额徽标。类名继续沿用 tku- 前缀，颜色只吃 --dsw-alias-* 变量。 */
+
+/* ---- 页面骨架 ---- */
+.tku-upanel { gap: 16px; }
+.tku-uhead { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+.tku-uhead-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0; }
+.tku-uhead-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tku-ufoot { padding-top: 4px; }
+
+/* ---- 天窗 / 模式切换 ---- */
+.tku-modes { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2); }
+.tku-mode { font: inherit; font-size: 12px; cursor: pointer; padding: 3px 9px; border-radius: 6px; border: none; background: transparent; color: var(--dsw-alias-label-secondary, #667); }
+.tku-mode:hover { background: rgba(127,127,127,.1); }
+.tku-mode.on { background: rgba(127,127,127,.16); color: var(--dsw-alias-label-primary); font-weight: 600; }
+
+/* ---- 概览数字 ---- */
+.tku-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tku-stat { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tku-stat-label { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.tku-stat-value { font-size: 19px; font-weight: 600; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.tku-stat-hint { font-size: 11px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tku-stat.warn { border-color: var(--dsw-alias-state-warning-primary, #d92); }
+.tku-stat.bad { border-color: var(--dsw-alias-state-error-primary, #d33); }
+.tku-stat.good { border-color: var(--dsw-alias-state-success-primary, #2e9e5b); }
+
+/* ---- 卡片 ---- */
+/* 三张卡片（消耗趋势 / 来源分布 / 模型使用排行）要长得一样高，所以配合
+   .tku-ugrid 的 align-items: stretch：卡片撑满整行，卡片正文吃掉剩余高度。
+   趋势图不必靠自然高度去凑——正文是 flex 容器，SVG 写死高度即可。 */
+.tku-ucard { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: hidden; }
+.tku-ucard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tku-ucard-title { margin: 0; font-size: 13px; font-weight: 600; }
+.tku-ucard-aside { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.tku-ucard-body { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+/* ---- 排行卡内部滚动 ----
+   卡片高度由一行里最高的那张定死（等高要求），所以排行条目一多就会把卡片撑破或
+   溢出到卡片外面。这里把排行卡（第三、四张）的 body 改成「高度锁死 + 内部滚动」：
+   body 吃满剩余高度、不再按内容撑开，列表在内部滚。
+   min-height: 0 是关键——flex 子项默认 min-height: auto 会拒绝收缩，滚动条不会出现。
+   用 is-scroll（由 JS 加在 section 上）而不是 :has()：旧版 Chromium 没有 :has。 */
+.tku-ucard.is-scroll .tku-ucard-body { min-height: 0; overflow: hidden; justify-content: flex-start; }
+/* 列表自己成为滚动容器：撑满 body 高度，超出就滚。
+   选择器写成后代（而不是 .body > .rank），因为能力卡的 .tku-rank 还多包了一层
+   .tku-ability——用后代选择器两种结构都能命中。 */
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; scrollbar-width: thin; }
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank::-webkit-scrollbar { width: 8px; }
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank::-webkit-scrollbar-track { background: transparent; }
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank::-webkit-scrollbar-thumb { background: var(--dsw-alias-border-l2); border-radius: 999px; }
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-tertiary); }
+/* 能力卡的列表外面还包了一层 .tku-ability（它带脚注），让这层也参与高度分配。 */
+.tku-ucard.is-scroll .tku-ucard-body .tku-ability { min-height: 0; flex: 1 1 auto; }
+/* 脚注不许被压掉：它是解释「分数不是用量」的唯一说明。 */
+.tku-ability-note { flex: 0 0 auto; }
+
+/* ---- 明细表内部滚动 ----
+   来源条目本机有 27 行左右，全铺开会把整页拉到很长。这里给表体封一个高度上限，
+   表头用 sticky 钉在框顶，往下滚的时候列名始终可见。 */
+.tku-ucard.is-scroll-table .tku-ucard-body { min-height: 0; overflow: hidden; justify-content: flex-start; }
+.tku-ucard.is-scroll-table .tku-table-wrap {
+  min-height: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* 表头钉住：背景要盖住底下滚上来的行，否则字会叠在一起。 */
+.tku-ucard.is-scroll-table .tku-utable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dsw-alias-bg-layer-2, var(--dsw-alias-bg-layer-1, #fff));
+}
+/* 滚动条样式与排行卡保持一致，避免页面上出现两种滚动条。 */
+.tku-ucard.is-scroll-table .tku-table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+.tku-ucard.is-scroll-table .tku-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.tku-ucard.is-scroll-table .tku-table-wrap::-webkit-scrollbar-thumb { background: var(--dsw-alias-border-l2); border-radius: 999px; }
+.tku-ucard.is-scroll-table .tku-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-tertiary); }
+/* 三张卡的列宽可拖拽。默认值写在 JS 的 USAGE_COLS_DEFAULT 里（拖过之后由内联
+   style 覆盖），这里只是没拿到宽度时的兜底：趋势图改柱状后需要更长的横轴，
+   来源分布则是「196 环 + 一段图例」的固定宽度，所以中间列按内容收紧，
+   省下来的宽度全给趋势图。窄屏由 minmax(300px, 1fr) 接管，自动折行。 */
+/* 中列空白的两个来源，各让一半：
+   1) max-content 取的是「环 196 + 间隙 + 图例」，而图例被 .tku-legend 的 flex-basis 撑宽了
+      ——默认从 140 收到 116，剩下的空余让自动外边距分给左右两侧，环就能再往左挪一点；
+   2) 环 196 上下各多出 38px 的空白（卡高 272），补一组窄屏断点把它缩到 160，
+      让整个 body 的宽和高一起收，中列从 492 降到 ~420。 */
+/* 一行四张卡。列宽按住 2:2:3:3（=20%:20%:30%:30%）分，行高由 --tku-row-h 钉死：
+   两张排行卡条目多，如果不钉高度，它们会把整行撑到上千像素，另两张跟着被拉长。
+   钉死之后排行卡在内部滚动，四张卡永远等高。 */
+.tku-ugrid { --tku-cols: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr); --tku-row-h: 380px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
+/* 窄屏：**明确折成 2×2**，不能用 repeat(auto-fit, minmax(300px, 1fr))。
+   auto-fit 只保证「每列至少 300」，一行放几张是浏览器自己算的——982px 时它算出
+   3 列，第四张卡被挤到第二行；而卡片是 align-items: stretch 拉满整行高的，
+   第二行就落到可见区域之外，用户看到的就是「第四张卡不见了」。
+   显式两列让四张卡稳定排成 2×2，不依赖浏览器对 auto-fit 的取整。 */
+/* 宽度不够才折行。四张卡按住不放，最小宽度加起来约 4×240 + 3×12 = 996，
+   所以 1180 以下折成 2×2、再窄一列一张。注意这里不再带 :not(.is-resize)——
+   拖拽把手已经整个移除，没有「用户手动调宽」这个状态了。 */
+@media (max-width: 1180px) { .tku-ugrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* 更窄（手机竖屏）时一列一张，别再挤成两列。 */
+@media (max-width: 620px) { .tku-ugrid { grid-template-columns: minmax(0, 1fr); } }
+/* 窄屏把环缩到 160，四张卡仍按 2:2:3:3 挤在一行。 */
+@media (max-width: 1500px) {
+  .tku-ugrid .tku-donut { width: 160px; height: 160px; }
+  .tku-ugrid .tku-legend { font-size: 11px; }
+}
+/* 中列的 max-content 由图例的 min-width 撑着（没有它，min-content 会取最长那个名字，
+   列宽随时变）。这条必须排在上面那个断点后面，否则窄屏时会被 font-size 那条打断覆盖。 */
+@media (min-width: 1181px) {
+  .tku-ugrid .tku-legend { min-width: 150px; }
+}
+/* 分宽把手绝对定位骑在两张卡的 12px 缝上。
+   为什么不用负边距：把手是 grid 里的普通子元素时，一旦列窄到放不下「把手 + 卡片最小宽度」，
+   grid 会把它整个挤到下一行（用户实测：伸长的趋势图把它顶到了第三行）。
+   绝对定位让它不占布局位置，也就没有「被挤走」这回事；位置由 left 百分比给。
+   位置写在 JS 的内联 style.left 上（每条缝留 0.6% 的富余，宁可差几个像素也不能
+   因为算窄了一点就掉进下一行）。 */
+.tku-resizer { position: absolute; top: 0; bottom: 0; z-index: 2; width: 9px; margin-left: -4.5px; cursor: col-resize; touch-action: none; -webkit-user-select: none; user-select: none; border-radius: 4px; transition: background-color .12s ease-out; }
+.tku-resizer:hover, .tku-resizer:focus-visible { background: rgba(127,127,127,.16); outline: none; }
+/* 握把：平时一小截竖条，悬停或拖动时变长变亮，提示「这里可以拖」。 */
+.tku-resizer-grip { position: absolute; left: 50%; top: 50%; width: 3px; height: 28px; margin: -14px 0 0 -1.5px; border-radius: 999px; background: var(--dsw-alias-border-l2); transition: height .12s ease-out, background-color .12s ease-out; }
+.tku-resizer:hover .tku-resizer-grip, .tku-resizer:focus-visible .tku-resizer-grip, .tku-resizing .tku-resizer-grip { height: 56px; margin-top: -28px; background: var(--dsw-alias-label-tertiary); }
+/* 拖动途中整页不吃选区、指针保持 col-resize，划过卡片也不会变成文本光标。 */
+.tku-resizing, .tku-resizing * { cursor: col-resize !important; user-select: none !important; }
+/* 曾经有一条 .tku-ugrid > .tku-ucard:first-child { grid-column: 1 / -1 }，把
+   趋势图强制占满整行。用户要的是「趋势图和下面两个图放在一行」，所以删掉——
+   现在 auto-fit 会按列宽自动决定一行放几张（宽屏三张一行，窄屏自动折行）。
+   注意：本段整体嵌在 client.js 的模板字符串里，注释里不能出现反引号或美元大括号。 */
+
+/* ---- 柱状（消耗趋势）---- */
+/* 趋势图高度由 --tku-trend-h 写死、宽度拉满卡片（SVG 用 preserveAspectRatio="none"，
+   横向由 CSS 决定、纵向由画布决定），所以它不会因为列宽变宽就变高，也不会把
+   「三张卡等高」连带拉高——三张卡的最终高度由内容最多的排行卡决定。 */
+.tku-chart { width: 100%; --tku-trend-h: 150px; }
+.tku-chart-svg { width: 100%; height: var(--tku-trend-h, 150px); display: block; overflow: visible; }
+.tku-chart-grid { stroke: var(--dsw-alias-border-l2); stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
+.tku-chart-axis { fill: var(--dsw-alias-label-tertiary); font-size: 10px; }
+/* 峰值气泡：贴在最高那根柱子的顶上。字比刻度略粗，它是要看懂「最高多少」的那个数；
+   paint-order 让描边垫在字形底下当底色，正好把柱子和网格线遮住一截。 */
+.tku-chart-peak { fill: var(--dsw-alias-label-secondary, #667); font-size: 10px; font-weight: 600; stroke: var(--dsw-alias-bg-layer-2, #fff); stroke-width: 3px; stroke-linejoin: round; paint-order: stroke fill; }
+/* 柱子：底色不透、顶端描边随主题，深浅色下都不会糊在网格线上。 */
+.tku-chart-bar { fill: var(--dsw-alias-state-business-primary, #4d6bfe); stroke: none; }
+.tku-chart-bar.is-cumulative { fill: var(--dsw-alias-state-business-primary, #4d6bfe); opacity: .82; }
+
+/* ---- 环形 + 图例 ---- */
+/* 环放大到 196，图例跟上去贴住，两者之间的空隙收紧到 10px。
+   自动外边距切三段：「环左 1 份、环与图例之间 10px、图例右 1 份」，
+   分组左右留白相等，不会出现一边贴边一边空一大片。
+/* body 是 flex 列：子项会被拉伸到整宽，wrap 必须显式 width:100%，
+   否则按内容收缩（环 160 + 图例 150 就溢出）；再把图例按 170 的基准改窄，
+   窄卡里两者才真能并排放下。 */
+.tku-donut-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-start; width: 100%; }
+/* 尺寸跟着 UsageDonut 里的 size 常量走（196）；和图例并排，图例在窄列里会自动折到环下方。 */
+.tku-donut { width: 196px; height: 196px; flex: 0 0 auto; margin-left: auto; }
+/* 卡片能被拖窄，而环形图是固定 196 的 flex 子项、拒绝收缩——窄卡时它会横向溢出，
+   右边一大段弧正好被裁掉，看着像图没画完。拖进来时允许等比缩小。 */
+@media (min-width: 1181px) { .tku-ucard-body .tku-donut { max-width: 100%; height: auto; } }
+/* flex-basis 给 116 而不是原来的 140：max-content 列轨道是「图例的 max-content 宽度」
+   说了算的，basis 越大中列越宽，环周围就空得越多。图例本身能缩（flex-shrink: 1），
+   用 min-width: 164px 把图例的下限钉住（名字 + 数值 + 百分比一行放得下），避免列一紧就折成两行。 */
+.tku-legend { list-style: none; margin: 0 0 0 auto; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 0 1 auto; min-width: 120px; }
+/* 行内三段：色点、名字、数值+占比。名字吃掉多余宽度（数字列跟着靠右），另外两段不伸缩。 */
+.tku-legend li { display: flex; align-items: center; gap: 6px; font-size: 12px; width: 100%; min-width: 0; }
+.tku-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+.tku-legend-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tku-legend-val { flex: 0 0 auto; margin-left: 10px; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-secondary, #667); }
+.tku-legend-pct { width: 42px; text-align: right; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); }
+
+/* ---- 排行条 ---- */
+.tku-rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tku-rank-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; }
+.tku-rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tku-rank-val { font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-secondary, #667); flex: 0 0 auto; }
+.tku-rank-bar { height: 6px; border-radius: 999px; background: rgba(127,127,127,.14); overflow: hidden; margin-top: 3px; }
+.tku-rank-fill { display: block; height: 100%; border-radius: 999px; }
+
+/* ---- 本机模型能力排行 ---- */
+/* 行骨架直接复用 .tku-rank（同一条视觉语言，两张排行卡摆一起才不会各说各话），
+   这里只补两处：用量占比这一列，以及「没有榜单分数」时画的那截虚条。 */
+.tku-ability { display: flex; flex-direction: column; gap: 10px; }
+/* 占比列固定宽度右对齐：八行叠起来时小数点要对得上，不能每行一个位置。 */
+.tku-ability-share { flex: 0 0 auto; width: 44px; text-align: right; font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+/* 没分数的行：不画填充条，只让底槽自己显形，再补一段很淡的短斜纹表示「无值」。
+   绝不能给成满宽——满宽的条在两张排行卡里都表示「第一名、满格」，读者会直接把
+   「榜单没收录这个模型」看成「这模型满分」。 */
+.tku-rank-fill.is-unknown { width: 100% !important; background: repeating-linear-gradient(135deg, var(--dsw-alias-border-l2) 0 3px, transparent 3px 9px) !important; opacity: .5; }
+.tku-ability-note { margin: 0; font-size: 11px; line-height: 1.5; color: var(--dsw-alias-label-tertiary); }
+
+/* ---- 明细表 ---- */
+.tku-table-wrap { overflow-x: auto; }
+.tku-utable td, .tku-utable th { white-space: nowrap; }
+.tku-utable td:first-child { white-space: normal; }
+.tku-utable .num { text-align: right; font-variant-numeric: tabular-nums; }
+.tku-utable .strong { font-weight: 600; }
+.tku-utable tbody tr:hover { background: rgba(127,127,127,.07); }
+
+/* ---- 空态 ---- */
+.tku-empty { padding: 18px 8px; text-align: center; font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+
+/* ---- 模型权威排名（用量面板最下方）---- */
+.tku-rsec { margin-top: 4px; }
+.tku-rtable td:first-child { white-space: nowrap; }
+.tku-rnote { margin: 0; line-height: 1.6; }
+.tku-rtasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.tku-rtask { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tku-rtask-head { display: flex; flex-direction: column; gap: 2px; }
+.tku-rtask-title { font-size: 12px; font-weight: 600; }
+/* 规则行原样展示「这个名次是怎么来的」，所以不折行成两行以上——宁可省略号也不截断语义。 */
+.tku-rtask-rule { font-size: 11px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tku-rtask-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.tku-rtask-list li { display: flex; align-items: baseline; gap: 6px; font-size: 12px; min-width: 0; }
+.tku-rtask-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tku-rtask-prov { flex: 0 0 auto; font-size: 11px; }
+.tku-rtask-val { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-secondary, #667); }
+.tku-banner { padding: 8px 12px; border-radius: 8px; font-size: 12px; border: 1px solid var(--dsw-alias-border-l2); }
+.tku-banner.warn { border-color: var(--dsw-alias-state-warning-primary, #d92); }
+.tku-banner.bad { border-color: var(--dsw-alias-state-error-primary, #d33); }
+
+/* ---- 输入框余额徽标 ---- */
+.tku-credit-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2); font-size: 11px; line-height: 1; color: var(--dsw-alias-label-secondary, #667); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* 用量页左上角的前端版本自证行：比正文更淡，只在需要排查「改了没生效」时才值得看。 */
+.tku-uver { font-size: 11px; opacity: .6; font-variant-numeric: tabular-nums; }
+
+/* ---- 通用基类（从 dsh-agent-checkin 迁入：本插件的前端要自带全套基础样式，
+   不能依赖另一个插件的 client.js 注入到页面里的 <style>） ---- */
+.tku-table-wrap { overflow-x: auto; }
+.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); }
+.tku-head { display: flex; flex-direction: column; gap: 4px; }
+.tku-title { margin: 0; font-size: 15px; font-weight: 600; }
+.tku-sub { margin: 0; font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 1.55; }
+.tku-banner { border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.6; }
+.tku-banner.bad { border-color: var(--dsw-alias-state-error-primary, #d33); }
+.tku-banner.warn { border-color: var(--dsw-alias-state-warning-primary, #d92); }
+.tku-banner.info { border-color: var(--dsw-alias-border-l2); }
+.tku-banner.nodeps { border-style: dashed; }
+.tku-banner.nodeps code { background: rgba(127,127,127,.14); padding: 1px 4px; border-radius: 4px; }
+.tku-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tku-grow { flex: 1 1 auto; }
+.tku-btn { font: inherit; font-size: 12px; cursor: pointer; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); }
+.tku-btn:hover:not(:disabled) { background: rgba(127,127,127,.1); }
+.tku-btn:disabled { opacity: .45; cursor: not-allowed; }
+.tku-btn.primary { border-color: var(--dsw-alias-state-business-primary, #4a7); }
+.tku-btn.primary:hover:not(:disabled) { background: rgba(74,170,119,.12); }
+a.tku-link { display: inline-block; text-decoration: none; }
+.tku-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tku-table th, .tku-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--dsw-alias-border-l2); vertical-align: top; }
+.tku-table th { font-weight: 600; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+.tku-name { font-weight: 600; }
+.tku-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+.tku-muted { color: var(--dsw-alias-label-tertiary); }
+
+/* 任务卡正文容器：内容多时靠它承接剩余高度。 */
+.tku-rtask-body { min-width: 0; }

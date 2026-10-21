@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-token-usage",
+    "description": "Token usage analytics: scans the host's own session logs and reports consumption by provider and model, cache hit rates, daily trends and a capability leaderboard for the models you actually use."
+  }
+}

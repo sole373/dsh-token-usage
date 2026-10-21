@@ -1,0 +1,6 @@
+# Register the token usage plugin without changing the profile's default model.
+# It only reads the host's own session logs; it starts no OAuth flow, copies no
+# credential off-box and registers no model provider.
+- insert:
+    - id: dsh-token-usage
+      name: dsh-token-usage
