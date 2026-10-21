@@ -263,13 +263,14 @@
 /* ---- 通用基类（从 dsh-agent-checkin 迁入：本插件的前端要自带全套基础样式，
    不能依赖另一个插件的 client.js 注入到页面里的 <style>） ---- */
 .tku-table-wrap { overflow-x: auto; }
-/* 面板根元素 = 宿主中栏（.BynINW_centerCol，overflow:hidden）里的那个滚动容器。
+/* 面板根元素 = 宿主中栏（.BynINW_centerCol，display:flex;flex-direction:column;
+   overflow:hidden）里的那个滚动容器。
    宿主中栏不会替占用者滚动：官方面板（如 xz4KEq_scroll、qWvkEq_root）都是自己
-   声明「占满 + 内部滚动」的。本插件原来没写，于是根元素按内容撑到 ~1700px，
-   而中栏只有 ~950px 可视高度，超出部分被 overflow:hidden 直接剪掉——最下方的
+   声明「占满 + 内部滚动」的。本插件原来没写，于是根元素按内容撑到 ~2000px，
+   而中栏只有 ~900px 可视高度，超出部分被 overflow:hidden 直接剪掉——最下方的
    「模型权威排名」区块因此只露个边、且没有任何办法滚到它。
-   这四行是修这一条：flex+min-height:0 让根元素吃满中栏高度，overflow-y:auto
-   把滚动条交回本面板自己，于是**整个用量页面可滚动**（面板内容超出中栏高度时）。
+   这几行是修这一条：flex+min-height:0 让根元素吃满中栏高度，overflow-y:auto
+   把滚动条交回本面板自己，于是**整个用量页面可滚动**。
    overscroll-behavior 用 auto 而非 contain：contain 会把滚动链锁死在本面板，
    滚到底时不再向外传递；auto 允许自然传递，外层若还能滚就接着滚。 */
 .tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: auto; }
