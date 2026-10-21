@@ -58,6 +58,22 @@
 .tku-ucard.is-scroll .tku-ucard-body .tku-ability { min-height: 0; flex: 1 1 auto; }
 /* 脚注不许被压掉：它是解释「分数不是用量」的唯一说明。 */
 .tku-ability-note { flex: 0 0 auto; }
+/* 能力排行的列表区限高 172px：正好露出 5 条（5×28 + 4×8），其余靠卡内滚动。
+   条目高度必须写死才准——否则 172px 会露出「5 条半」或「6 条少半」：
+   文字行高 12px×1.55≈19px，条形 6px + margin-top 3px = 9px，合计 28px。
+   .tku-ability 是 flex 列（列表 + 脚注），列表要能滚动就得 min-height:0 + flex:1。 */
+.tku-ucard.is-scroll .tku-ucard-body .tku-ability .tku-rank {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 172px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+/* 排行条的行高写死（28px），与上面 172px 的计算对应。 */
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank > li { height: 28px; }
+.tku-ucard.is-scroll .tku-ucard-body .tku-rank > li .tku-rank-bar { margin-top: 3px; }
 
 /* ---- 明细表内部滚动 ----
    来源条目本机有 27 行左右，全铺开会把整页拉到很长。这里给表体封一个高度上限，
@@ -110,13 +126,17 @@
    两张排行卡条目多，如果不钉高度，它们会把整行撑到上千像素，另两张跟着被拉长。
    钉死之后排行卡在内部滚动，四张卡永远等高。
 
-   行高 380 → 300 → 250 → 210：让这四张卡更矮，把空间让给下面的明细表与排名区。
+   行高 380 → 300 → 250 → 210 → 250：让这四张卡更矮，把空间让给下面的明细表与排名区。
    下限受两处硬约束卡住（都不能被裁）：
      - 环形图 SVG 内在 120px（窄屏断点 1400px 以下是 100px），它不缩；
      - 趋势图 --tku-trend-h 130px。
    卡内固定开销 = padding 12×2 + 标题行 ~20 + gap 10 ≈ 54px，
-   所以 210px 时 body 还剩 ~156px：环 120 放得下（余 36px），
-   趋势图 130 也放得下（余 26px）。
+   所以 250px 时 body 还剩 ~196px：环 120 放得下（余 76px），
+   趋势图 130 也放得下（余 66px）。
+   为什么回到 250：第四张能力排行要在当前窗口下正好露出 5 个模型。
+   列表区 172px（5 条）+ 脚注 1 行 17px + gap 10 + 卡头开销 54 = 253px，
+   210px 时列表只剩 129px（4 条）。250px 是满足「露出 5 个」的下限附近，
+   且环与趋势图都还放得下。
 
    列宽 2:2:3:3 → 2:2.5:2.75:2.75：第二张（来源分布）原来只有 2fr，太窄了——
    环 + 间隙 10 + 图例排不下时，flex-wrap 会把图例折到环下方
@@ -124,7 +144,7 @@
    1200px 起就能并排；1400px 以下靠窄屏断点把环缩到 100px，需求降到 230px。
    省下的宽度给了第三、四张（两张排行卡）：它们一行最少要名字 60 + 占比 44 +
    数值 40 + 间距 ≈ 156px，1300px 下 body 有 324px，仍远够用。 */
-.tku-ugrid { --tku-cols: minmax(0, 2fr) minmax(0, 2.5fr) minmax(0, 2.75fr) minmax(0, 2.75fr); --tku-row-h: 210px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
+.tku-ugrid { --tku-cols: minmax(0, 2fr) minmax(0, 2.5fr) minmax(0, 2.75fr) minmax(0, 2.75fr); --tku-row-h: 250px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
 /* 窄屏：**明确折成 2×2**，不能用 repeat(auto-fit, minmax(300px, 1fr))。
    auto-fit 只保证「每列至少 300」，一行放几张是浏览器自己算的——982px 时它算出
    3 列，第四张卡被挤到第二行；而卡片是 align-items: stretch 拉满整行高的，
