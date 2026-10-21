@@ -44,14 +44,14 @@ nem se chamam entre si.
 ## Installation
 
 ```bash
-dsh plugin add dsh-token-usage
+dsh plugin add @sole373/dsh-token-usage
 ```
 
 Ou acrescente uma linha ao `cordis.patch.yml` do perfil:
 
 ```yaml
 - id: dsh-token-usage
-  name: dsh-token-usage
+  name: '@sole373/dsh-token-usage'
 ```
 
 ## Usage

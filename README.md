@@ -48,14 +48,14 @@ each other. Installing one has no effect on the other.
 ## Installation
 
 ```bash
-dsh plugin add dsh-token-usage
+dsh plugin add @sole373/dsh-token-usage
 ```
 
 Or add one line to the profile's `cordis.patch.yml`:
 
 ```yaml
 - id: dsh-token-usage
-  name: dsh-token-usage
+  name: '@sole373/dsh-token-usage'
 ```
 
 Restart DSH afterwards; a "Token usage" entry appears in the sidebar.

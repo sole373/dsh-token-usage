@@ -1,6 +1,10 @@
 # Register the token usage plugin without changing the profile's default model.
 # It only reads the host's own session logs; it starts no OAuth flow, copies no
 # credential off-box and registers no model provider.
+#
+# The `id` stays un-scoped on purpose: it is the host's internal entry key, and
+# changing it would orphan any state the user already has under it. The `name`
+# carries the npm scope, matching how scoped bundles register themselves.
 - insert:
     - id: dsh-token-usage
-      name: dsh-token-usage
+      name: '@sole373/dsh-token-usage'

@@ -43,14 +43,14 @@
 ## Installation
 
 ```bash
-dsh plugin add dsh-token-usage
+dsh plugin add @sole373/dsh-token-usage
 ```
 
 या प्रोफ़ाइल की `cordis.patch.yml` में एक पंक्ति जोड़ें:
 
 ```yaml
 - id: dsh-token-usage
-  name: dsh-token-usage
+  name: '@sole373/dsh-token-usage'
 ```
 
 ## Usage

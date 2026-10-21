@@ -44,14 +44,14 @@
 ## 安装
 
 ```bash
-dsh plugin add dsh-token-usage
+dsh plugin add @sole373/dsh-token-usage
 ```
 
 或在 profile 的 `cordis.patch.yml` 里加一行：
 
 ```yaml
 - id: dsh-token-usage
-  name: dsh-token-usage
+  name: '@sole373/dsh-token-usage'
 ```
 
 装完重启 DSH，侧栏会出现「Token 用量」入口。
