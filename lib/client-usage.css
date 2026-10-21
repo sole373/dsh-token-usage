@@ -96,21 +96,21 @@
    两张排行卡条目多，如果不钉高度，它们会把整行撑到上千像素，另两张跟着被拉长。
    钉死之后排行卡在内部滚动，四张卡永远等高。
 
-   行高 380 → 300 → 250：让这四张卡更矮，把空间让给下面的明细表与排名区。
+   行高 380 → 300 → 250 → 210：让这四张卡更矮，把空间让给下面的明细表与排名区。
    下限受两处硬约束卡住（都不能被裁）：
-     - 环形图 SVG 内在 156px（窄屏断点 1400px 以下是 130px），它不缩；
-     - 趋势图 --tku-trend-h 150px。
+     - 环形图 SVG 内在 120px（窄屏断点 1400px 以下是 100px），它不缩；
+     - 趋势图 --tku-trend-h 130px。
    卡内固定开销 = padding 12×2 + 标题行 ~20 + gap 10 ≈ 54px，
-   所以 250px 时 body 还剩 ~196px，环形图 156px 放得下（余 ~40px）。
-   趋势图 150px 在 196px 里也放得下（余 46px）。
+   所以 210px 时 body 还剩 ~156px：环 120 放得下（余 36px），
+   趋势图 130 也放得下（余 26px）。
 
    列宽 2:2:3:3 → 2:2.5:2.75:2.75：第二张（来源分布）原来只有 2fr，太窄了——
-   环 + 间隙 10 + 图例最少 130 排不下时，flex-wrap 会把图例折到环下方
-   （看起来就是「图被压扁了」）。环缩到 156px 后并排所需宽度降到 296px，
-   1300px 起就能并排；1400px 以下靠窄屏断点把环缩到 130px，需求降到 270px。
+   环 + 间隙 10 + 图例排不下时，flex-wrap 会把图例折到环下方
+   （看起来就是「图被压扁了」）。环缩到 120px 后并排所需宽度降到 250px，
+   1200px 起就能并排；1400px 以下靠窄屏断点把环缩到 100px，需求降到 230px。
    省下的宽度给了第三、四张（两张排行卡）：它们一行最少要名字 60 + 占比 44 +
    数值 40 + 间距 ≈ 156px，1300px 下 body 有 324px，仍远够用。 */
-.tku-ugrid { --tku-cols: minmax(0, 2fr) minmax(0, 2.5fr) minmax(0, 2.75fr) minmax(0, 2.75fr); --tku-row-h: 250px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
+.tku-ugrid { --tku-cols: minmax(0, 2fr) minmax(0, 2.5fr) minmax(0, 2.75fr) minmax(0, 2.75fr); --tku-row-h: 210px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
 /* 窄屏：**明确折成 2×2**，不能用 repeat(auto-fit, minmax(300px, 1fr))。
    auto-fit 只保证「每列至少 300」，一行放几张是浏览器自己算的——982px 时它算出
    3 列，第四张卡被挤到第二行；而卡片是 align-items: stretch 拉满整行高的，
@@ -122,21 +122,21 @@
 @media (max-width: 1180px) { .tku-ugrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* 更窄（手机竖屏）时一列一张，别再挤成两列。 */
 @media (max-width: 620px) { .tku-ugrid { grid-template-columns: minmax(0, 1fr); } }
-/* 窄屏把环缩到 130：第二张的 body 宽度不够放下「环 + 图例」，图例会被折到环下方。
-   环从 196 缩到 156、并排需求降到 296px 之后，1400px 以上都用大环；
-   只有 1400px 以下（body < 296px）才需要再缩一档到 130px，此时需求 270px，
-   1300px 起就放得下。 */
+/* 窄屏把环缩到 100：第二张的 body 宽度不够放下「环 + 图例」，图例会被折到环下方。
+   环从 196 缩到 120、并排需求降到 250px 之后，1400px 以上都用大环；
+   只有 1400px 以下（body < 250px）才需要再缩一档到 100px，此时需求 230px，
+   1200px 起就放得下。 */
 @media (max-width: 1400px) {
-  .tku-ugrid .tku-donut { width: 130px; height: 130px; }
+  .tku-ugrid .tku-donut { width: 100px; height: 100px; }
   .tku-ugrid .tku-legend { font-size: 11px; }
 }
 /* 中列的 max-content 由图例的 min-width 撑着（没有它，min-content 会取最长那个名字，
    列宽随时变）。这条必须排在上面那个断点后面，否则窄屏时会被 font-size 那条打断覆盖。
-   min-width 150 → 120：环缩到 156px 后，并排需要 环156+10+120 = 286px，
-   1400px 以上 body 有 317px，1300px 起都放得下。图例里的名字是 flex:1 省略号
+   min-width 150 → 110：环缩到 120px 后，并排需要 环120+10+110 = 240px，
+   1400px 以上 body 有 317px，1200px 起都放得下。图例里的名字是 flex:1 省略号
    那一位，收窄它不影响可读性。 */
 @media (min-width: 1181px) {
-  .tku-ugrid .tku-legend { min-width: 120px; }
+  .tku-ugrid .tku-legend { min-width: 110px; }
 }
 /* 分宽把手绝对定位骑在两张卡的 12px 缝上。
    为什么不用负边距：把手是 grid 里的普通子元素时，一旦列窄到放不下「把手 + 卡片最小宽度」，
@@ -159,9 +159,12 @@
 /* ---- 柱状（消耗趋势）---- */
 /* 趋势图高度由 --tku-trend-h 写死、宽度拉满卡片（SVG 用 preserveAspectRatio="none"，
    横向由 CSS 决定、纵向由画布决定），所以它不会因为列宽变宽就变高，也不会把
-   「三张卡等高」连带拉高——三张卡的最终高度由内容最多的排行卡决定。 */
-.tku-chart { width: 100%; --tku-trend-h: 150px; }
-.tku-chart-svg { width: 100%; height: var(--tku-trend-h, 150px); display: block; overflow: visible; }
+   「三张卡等高」连带拉高——三张卡的最终高度由内容最多的排行卡决定。
+   150 → 130px：行高降到 210px 后 body 只剩 156px，130 放得下（余 26px）。
+   坐标系与显示尺寸是解耦的（scaleX/scaleY 按 boxWidth/boxHeight 自洽反推），
+   所以只改这里，文字仍会被拽回原形。 */
+.tku-chart { width: 100%; --tku-trend-h: 130px; }
+.tku-chart-svg { width: 100%; height: var(--tku-trend-h, 130px); display: block; overflow: visible; }
 .tku-chart-grid { stroke: var(--dsw-alias-border-l2); stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
 .tku-chart-axis { fill: var(--dsw-alias-label-tertiary); font-size: 10px; }
 /* 峰值气泡：贴在最高那根柱子的顶上。字比刻度略粗，它是要看懂「最高多少」的那个数；
@@ -179,9 +182,9 @@
    否则按内容收缩（环 160 + 图例 150 就溢出）；再把图例按 170 的基准改窄，
    窄卡里两者才真能并排放下。 */
 .tku-donut-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-start; width: 100%; }
-/* 尺寸跟着 UsageDonut 里的 size 常量走（156）；和图例并排，图例在窄列里会自动折到环下方。 */
-.tku-donut { width: 156px; height: 156px; flex: 0 0 auto; margin-left: auto; }
-/* 卡片能被拖窄，而环形图是固定 156 的 flex 子项、拒绝收缩——窄卡时它会横向溢出，
+/* 尺寸跟着 UsageDonut 里的 size 常量走（120）；和图例并排，图例在窄列里会自动折到环下方。 */
+.tku-donut { width: 120px; height: 120px; flex: 0 0 auto; margin-left: auto; }
+/* 卡片能被拖窄，而环形图是固定 120 的 flex 子项、拒绝收缩——窄卡时它会横向溢出，
    右边一大段弧正好被裁掉，看着像图没画完。拖进来时允许等比缩小。 */
 @media (min-width: 1181px) { .tku-ucard-body .tku-donut { max-width: 100%; height: auto; } }
 /* flex-basis 给 116 而不是原来的 140：max-content 列轨道是「图例的 max-content 宽度」
@@ -231,10 +234,10 @@
 .tku-rtable td:first-child { white-space: nowrap; }
 /* 总榜表体的高度上限：它和「按来源明细」共用 is-scroll-table 那套机制，
    但行数少得多（总榜上限 12 行，约 414px；明细表本机 27 行，约 894px）。
-   这里单独放宽：12 行一屏能看完（~414px），留些余量到 560px，
+   这里单独放宽：12 行一屏能看完（~414px），留些余量到 720px，
    以后把 RANK_LIMIT 调大时也仍能滚。
    注意这是**覆盖** is-scroll-table 的 520px，必须排在其后。 */
-.tku-ucard.is-scroll-table.is-rank-table .tku-table-wrap { max-height: 560px; }
+.tku-ucard.is-scroll-table.is-rank-table .tku-table-wrap { max-height: 720px; }
 .tku-rnote { margin: 0; line-height: 1.6; }
 .tku-rtasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .tku-rtask { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -266,8 +269,10 @@
    而中栏只有 ~950px 可视高度，超出部分被 overflow:hidden 直接剪掉——最下方的
    「模型权威排名」区块因此只露个边、且没有任何办法滚到它。
    这四行是修这一条：flex+min-height:0 让根元素吃满中栏高度，overflow-y:auto
-   把滚动条交回本面板自己，overscroll-behavior 防止滚到底后把滚动链传给宿主。 */
-.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+   把滚动条交回本面板自己，于是**整个用量页面可滚动**（面板内容超出中栏高度时）。
+   overscroll-behavior 用 auto 而非 contain：contain 会把滚动链锁死在本面板，
+   滚到底时不再向外传递；auto 允许自然传递，外层若还能滚就接着滚。 */
+.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: auto; }
 .tku-head { display: flex; flex-direction: column; gap: 4px; }
 .tku-title { margin: 0; font-size: 15px; font-weight: 600; }
 .tku-sub { margin: 0; font-size: 12px; color: var(--dsw-alias-label-tertiary); line-height: 1.55; }
