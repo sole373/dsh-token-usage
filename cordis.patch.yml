@@ -2,9 +2,12 @@
 # It only reads the host's own session logs; it starts no OAuth flow, copies no
 # credential off-box and registers no model provider.
 #
-# The `id` stays un-scoped on purpose: it is the host's internal entry key, and
-# changing it would orphan any state the user already has under it. The `name`
-# carries the npm scope, matching how scoped bundles register themselves.
+# The `id` is the host's internal entry key. It must be unique across every
+# installed plugin: npm also hosts an unrelated unscoped package literally
+# named `dsh-token-usage` (a different implementation), and the host's loader
+# reuses a given id without complaining. Using the scoped package name keeps
+# the two installs from silently colliding. This plugin keeps no state under
+# the entry key, so the rename costs nothing.
 - insert:
-    - id: dsh-token-usage
+    - id: '@sole373/dsh-token-usage'
       name: '@sole373/dsh-token-usage'

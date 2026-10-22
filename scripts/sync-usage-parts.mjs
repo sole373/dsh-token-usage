@@ -8,6 +8,13 @@
  *
  * 标记区里的内容一律视为生成物：改内容请改片段文件，然后重跑本脚本。
  * 不要手改标记区，否则下次同步会被覆盖（本脚本不会吞掉标记外的任何东西）。
+ *
+ * 行尾策略：**读写一律按 LF 归一化**。片段文件在 Windows 上被检出成 CRLF
+ * （`core.autocrlf=true`）时，若直接 `split('\n')`，每行末尾会残留一个 `\r`，
+ * 拼进 client.js 后就会在标记区内部混入「一半 CRLF、一半 LF」的混合行尾——
+ * 同样的代码内容在两个平台上字节不同，diff 全是噪声。
+ * 所以读入时统一 `replace(/\r\n/g, '\n')`，写回时也只写 LF。
+ * 归一化只动行尾符，不动任何字符内容，故脚本保持幂等。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -22,6 +29,17 @@ const CSS_BEGIN = '/* >>> usage-panel css（由 scripts/sync-usage-parts.mjs 生
 const CSS_END = '/* <<< usage-panel css <<< */'
 const CODE_BEGIN = '// >>> usage-panel parts（由 scripts/sync-usage-parts.mjs 生成，勿手改本段） >>>'
 const CODE_END = '// <<< usage-panel parts <<<'
+
+/**
+ * 读入文本并把行尾统一成 LF。
+ *
+ * Windows 检出（`core.autocrlf=true`）会让片段文件带 CRLF；直接 split('\n')
+ * 会在每行末尾留下 `\r`，拼进 client.js 后造成标记区内部行尾混杂。
+ * 这里只替换行尾符，不碰任何其它字符，所以对内容零影响。
+ */
+function readNormalized(path) {
+  return readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+}
 
 /** 用起止标记替换老内容；标记缺失时直接报错，而不是猜位置。 */
 function replaceBetween(source, begin, end, body) {
@@ -47,16 +65,18 @@ function indent(text, spaces) {
     .join('\n')
 }
 
-let source = readFileSync(CLIENT, 'utf8')
+let source = readNormalized(CLIENT)
 
-const css = readFileSync(join(LIB, CSS_FILE), 'utf8').trim()
+const css = readNormalized(join(LIB, CSS_FILE)).trim()
 source = replaceBetween(source, CSS_BEGIN, CSS_END, CSS_BEGIN + '\n' + css + '\n' + CSS_END)
 
 const code = PARTS.map((name) => {
-  const body = indent(readFileSync(join(LIB, name), 'utf8').trimEnd(), 4)
+  const body = indent(readNormalized(join(LIB, name)).trimEnd(), 4)
   return '    // ---- ' + name + ' ----\n' + body
 }).join('\n\n')
 source = replaceBetween(source, CODE_BEGIN, CODE_END, CODE_BEGIN + '\n' + code + '\n    ' + CODE_END)
 
+// source 已整体归一成 LF（readNormalized），片段也是 LF，
+// 因此输出文件全文行尾一致（纯 LF），与仓库存储格式一致。
 writeFileSync(CLIENT, source, 'utf8')
 console.log('synced', PARTS.length, 'parts and', css.length, 'chars of CSS into client.js')

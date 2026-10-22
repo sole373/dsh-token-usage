@@ -2,7 +2,7 @@
   "name": "@sole373/dsh-token-usage",
   "displayName": "dsh-token-usage",
   "description": "Token usage analytics for DeepSeek Harness: scans the host's own session logs and reports consumption by provider and model, cache hit rates, daily trends and a capability leaderboard for the models you actually use.",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@11.7.0",

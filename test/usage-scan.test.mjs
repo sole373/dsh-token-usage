@@ -10,6 +10,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReadStream } from 'node:fs'
+import { zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 
 import { decompressAll, frameBounds, localDayKey, scanSessionFiles } from '../lib/usage-scan.js'
 import { createUsageStore } from '../lib/usage-store.js'
@@ -24,18 +25,65 @@ function ok(cond, message) {
 // ---- 1. 帧切分：拿本机第一份真实日志做真值比对 -------------------------------
 const { homeDirForTest } = { homeDirForTest: process.env.USERPROFILE }
 const { readdir } = await import('node:fs/promises')
+
+/**
+ * 找出**第一个含计费记录**的真实会话日志。
+ *
+ * 为什么要遍历而不是取第一个匹配文件：本机 `~/.dsh/sessions` 下混着两类日志——
+ * 正常会话（带 `assistant/message`）和**空会话种子**（只有 session / permission/preset /
+ * sandbox/mode / approval/policy 等元事件，没有任何 assistant/message）。
+ * 只按 readdir 枚举顺序取第一个文件，等于赌它不是空种子——本机实测 82 份候选里
+ * 有 12 份是空种子，命中就必然误报失败。这是环境依赖型脆弱测试，不是插件 bug。
+ * 所以这里逐个解压，只认真正含 `assistant/message` 的那份。
+ */
 async function firstLog() {
   const root = join(homeDirForTest, '.dsh', 'sessions')
-  const dirs = await readdir(root, { withFileTypes: true })
+  let dirs
+  try {
+    dirs = await readdir(root, { withFileTypes: true })
+  } catch {
+    return undefined // 本机没有会话目录：交给调用方走 skip 分支
+  }
+  let scanned = 0
   for (const d of dirs) {
     if (!d.isDirectory()) continue
     const sub = join(root, d.name)
-    for (const s of await readdir(sub, { withFileTypes: true })) {
+    let subs
+    try {
+      subs = await readdir(sub, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const s of subs) {
       if (!s.isDirectory()) continue
-      for (const f of await readdir(join(sub, s.name))) {
-        if (/^session(\.\w+)?\.jsonl\.zstd$/.test(f)) return join(sub, s.name, f)
+      let files
+      try {
+        files = await readdir(join(sub, s.name))
+      } catch {
+        continue
+      }
+      for (const f of files) {
+        if (!/^session(\.\w+)?\.jsonl\.zstd$/.test(f)) continue
+        const path = join(sub, s.name, f)
+        scanned += 1
+        let text
+        try {
+          const buf = await (await import('node:fs/promises')).readFile(path)
+          text = decompressAll(buf).toString('utf8')
+        } catch {
+          continue // 正在写入或已损坏的文件直接跳过，不影响找下一个
+        }
+        // 空种子只有元事件，没有 assistant/message —— 跳过，继续找下一份。
+        if (!text.includes('"assistant/message"')) continue
+        return path
       }
     }
+  }
+  if (scanned > 0) {
+    throw new Error(
+      `本机没有含 assistant/message 的会话日志：${scanned} 份候选日志全是空会话种子` +
+        '（只有 session / permission/preset / sandbox/mode / approval/policy 等元事件）',
+    )
   }
   return undefined
 }
@@ -59,6 +107,33 @@ if (sample !== undefined) {
   ok(parsed.every((r) => r !== undefined), `全部 ${lines.length} 行都是合法 JSON`)
 } else {
   console.log('  skip - 本机没有会话日志，跳过真实样本检查')
+}
+
+// ---- 1b. 合成多帧固件：不依赖本机日志，多帧解压永远可验证 --------------------
+//
+// 核心坑是「Node 的 zstdDecompressSync 只解第一帧」。这个断言必须能在没有本机
+// 日志的干净环境里跑，所以用 node:zlib 造两段内容、分别压缩、首尾相接拼成
+// 一个 buffer，模拟真实会话日志的多帧结构。
+{
+  const partA = '{"type":"assistant/message","tag":"frame-A"}\n'
+  const partB = '{"type":"assistant/message","tag":"frame-B"}\n'
+  const frameA = zstdCompressSync(Buffer.from(partA, 'utf8'))
+  const frameB = zstdCompressSync(Buffer.from(partB, 'utf8'))
+  const buf = Buffer.concat([frameA, frameB])
+
+  const bounds = frameBounds(buf)
+  ok(bounds.length === 2, `合成固件：帧切分识别出 2 帧，实际 ${bounds.length}`)
+  ok(bounds[0][0] === 0 && bounds[0][1] === frameA.length, '第一帧边界精确贴合')
+  ok(bounds[1][0] === frameA.length && bounds[1][1] === buf.length, '第二帧边界精确贴合')
+
+  const all = decompressAll(buf).toString('utf8')
+  ok(all.includes('frame-A'), 'decompressAll 解出第一段内容')
+  ok(all.includes('frame-B'), 'decompressAll 解出第二段内容')
+
+  // 固化「Node 原生只解第一帧」这个坑：直接用 zstdDecompressSync 会静默丢掉 99% 内容。
+  const native = zstdDecompressSync(buf).toString('utf8')
+  ok(native.includes('frame-A'), 'Node 原生解压能拿到第一段')
+  ok(!native.includes('frame-B'), 'Node 原生解压拿不到第二段（只解第一帧，正是要绕开的坑）')
 }
 
 // ---- 2. 合成样本：求和口径与来源分组 ----------------------------------------

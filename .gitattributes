@@ -1,0 +1,22 @@
+# 仓库行尾策略：存储统一 LF，检出也统一 LF。
+#
+# 背景：`core.autocrlf=true` 时，Windows 检出会把文本文件写成 CRLF，
+# 片段文件（lib/client-usage-*.js、lib/client-usage.css）因此带 CRLF，
+# 同步脚本若直接 split('\n') 就会在生成物里混入混合行尾。
+# 这里把生成物、脚本与测试固定为 LF，从根上消除检出端的 CRLF 混入。
+
+# 让 Git 自行判断文本文件（二进制文件自动跳过行尾转换）
+* text=auto
+
+# 生成物与片段：入库与检出都是 LF
+lib/client.js text eol=lf
+lib/client-usage-shared.js text eol=lf
+lib/client-usage-charts.js text eol=lf
+lib/client-usage-ability.js text eol=lf
+lib/client-usage.js text eol=lf
+lib/client-model-rank.js text eol=lf
+lib/client-usage.css text eol=lf
+
+# 脚本与测试：跨平台逐行一致，避免正则/行尾假设被检出形态打乱
+scripts/*.mjs text eol=lf
+test/*.mjs text eol=lf
