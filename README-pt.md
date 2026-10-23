@@ -63,7 +63,9 @@ dias / número de chamadas, mais acertos de cache, falhas e taxa de acerto), qua
 gráficos (tendência de consumo, distribuição por provedor, modelos mais usados e
 capacidade dos modelos que você usou), uma tabela de detalhe por origem, o ranking de
 modelos com recomendações por tarefa (programação / raciocínio / agêntico / contexto
-longo / visão / melhor custo-benefício) e um rodapé com o custo real da varredura.
+longo / visão / melhor custo-benefício; um mesmo modelo disponível em várias plataformas
+aparece como uma única linha com todas elas na coluna de origem) e um rodapé com o custo
+real da varredura.
 
 A janela de tempo pode ser de 7 / 30 / 90 dias ou "tudo". "Refresh" força uma nova
 varredura; o resto usa o cache.
@@ -98,11 +100,19 @@ Os logs de sessão só crescem, então não há razão para reler tudo. O scanne
 
 Duas fontes, rigorosamente separadas: as **notas de capacidade** vêm de um ranking
 público (a API `/api/v1/models` do OpenRouter, sem autenticação, com os índices
-intelligence / coding / agentic do Artificial Analysis), e o **escopo** são os modelos
-que realmente aparecem nos seus logs de sessão.
+intelligence / coding / agentic do Artificial Analysis), e o **escopo** são **todos os
+modelos chamáveis agora por este host**: o `ctx.llm` oficial (LlmRuntime) enumera os
+modelos anunciados de cada plataforma, então cada ativação/desativação em
+"Plataformas e Modelos" reflete-se fielmente.
 
 > ⚠️ **Declaração de escopo (impressa no painel, não escondida)**: o ranking só responde
 > "qual é a nota deste modelo", **não** "você tem direito de chamá-lo".
+
+`rankScope` aceita outros dois valores: `used` classifica só os modelos que realmente
+aparecem nos seus logs de sessão (inclusive chamadas históricas de modelos em desuso), e
+`all` classifica o ranking público inteiro. Se a enumeração do catálogo falhar, o painel
+informa honestamente "catálogo indisponível" e **nunca** recua em silêncio para outro
+escopo.
 
 ### Leaderboard cache
 
@@ -118,7 +128,7 @@ usando o último ranking válido e o painel avisa.
 | `sessionsDir` | `''` | Raiz dos logs; vazio significa `$DSH_HOME/sessions` |
 | `usageCacheSeconds` | `30` | Cache dos resultados de varredura |
 | `rankCacheHours` | `6` | Cache do ranking, em horas |
-| `rankScope` | `'used'` | `used` = só os modelos usados; `all` = o ranking inteiro |
+| `rankScope` | `'catalog'` | `catalog` = todos os modelos chamáveis do host (padrão); `used` = só os usados; `all` = o ranking inteiro |
 
 ## Honest reporting
 
@@ -126,7 +136,7 @@ usando o último ranking válido e o painel avisa.
 - **Sem adivinhar**: modelo sem entrada no ranking mostra "—", não 0; denominador zero
   mostra "—", não 0%.
 - **Varredura incompleta avisa**: é marcada como "esta passagem não terminou".
-- **O ranking lista só os modelos que você usou**.
+- **O ranking lista só os modelos chamáveis do host** (ou, com `rankScope: used`, os que você usou).
 
 ## Design trade-offs
 
@@ -137,7 +147,7 @@ usando o último ranking válido e o painel avisa.
 | Nunca ler `totalTokens` | O campo antigo não bate com a soma dos quatro segmentos | Somamos por segmento |
 | Cache em memória, sem SQLite | Os logs só crescem; a memória já reduz atualizações a milissegundos | Uma varredura a frio após reiniciar o host |
 | Notas de uma API pública | Capacidades devem ser **medidas por outros**, não estimadas | Exige rede; offline reutiliza a última foto |
-| Escopo = chamadas observadas | Mesma base do cartão de capacidade e sem depender de outro plugin | Modelos instalados mas nunca usados não aparecem |
+| Escopo = catálogo chamável do host | Responde "o que posso chamar agora" e segue cada mudança em Plataformas e Modelos | Exige o serviço LlmRuntime do host; sem ele o painel informa honestamente |
 
 ## Licence
 

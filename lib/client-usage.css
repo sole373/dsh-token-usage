@@ -266,15 +266,13 @@
 /* ---- 模型权威排名（用量面板最下方）---- */
 .tku-rsec { margin-top: 4px; }
 .tku-rtable td:first-child { white-space: nowrap; }
-/* 总榜表体的高度上限：它和「按来源明细」共用 is-scroll-table 那套机制，
-   但行数少得多（总榜上限 12 行；明细表本机 27 行，只露 10 行）。
-   这里单独放宽到 720px：12 行一屏能看完，以后把 RANK_LIMIT 调大时也仍能滚。
-   同时把行高还原成自然高度——上面的「行高写死 28px」是为了让明细表的
-   「正好 10 行」是个确定值，总榜不需要这个约束。
-   注意这两条都是**覆盖** is-scroll-table 的规则，必须排在其后。 */
-.tku-ucard.is-scroll-table.is-rank-table .tku-table-wrap { max-height: 720px; }
-.tku-ucard.is-scroll-table.is-rank-table .tku-utable tbody tr { height: auto; }
-.tku-ucard.is-scroll-table.is-rank-table .tku-utable thead tr { height: auto; }
+/* 总榜表体的高度上限：与「按来源明细」同一套规则——表头 26px + 行高固定 28px，
+   max-height 306px 正好露出 10 行，第 11 行起表体内部纵向滚动、表头 sticky 钉住。
+   总榜数据自 v1.3.0 起不截断（有分数的模型全部返回，可能上百行），但默认
+   只铺开 10 行：控制卡片在整页里的占比，其余靠滚动查看——卡片右上角标了
+   总行数，免得被误以为还是截断的旧版。
+   is-rank-table 类保留作语义标记：将来总榜想单独调高度，改这一条即可。 */
+.tku-ucard.is-scroll-table.is-rank-table .tku-table-wrap { max-height: 306px; }
 .tku-rnote { margin: 0; line-height: 1.6; }
 .tku-rtasks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .tku-rtask { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }

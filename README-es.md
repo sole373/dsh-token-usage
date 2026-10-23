@@ -63,7 +63,9 @@ número de llamadas, más aciertos de caché, fallos y tasa de acierto), cuatro 
 (tendencia de consumo, reparto por proveedor, modelos más usados y capacidad de los
 modelos que usted usó), una tabla de detalle por origen, la clasificación de modelos con
 recomendaciones por tarea (programación / razonamiento / agéntico / contexto largo /
-visión / mejor relación calidad-precio) y un pie con el coste real del escaneo.
+visión / mejor relación calidad-precio; un mismo modelo disponible en varias plataformas
+se muestra como una sola fila con todas las plataformas en la columna de origen) y un pie
+con el coste real del escaneo.
 
 La ventana de tiempo puede ser de 7 / 30 / 90 días o «todo». «Refresh» fuerza un
 reeescaneo; el resto usa la caché.
@@ -97,11 +99,19 @@ escáner anota `size + mtime` de cada archivo y solo vuelve a leer los que cambi
 
 Dos fuentes, estrictamente separadas: las **puntuaciones de capacidad** vienen de una
 clasificación pública (la API `/api/v1/models` de OpenRouter, sin autenticación, con los
-índices intelligence / coding / agentic de Artificial Analysis), y el **alcance** son los
-modelos que aparecen de verdad en sus registros de sesión.
+índices intelligence / coding / agentic de Artificial Analysis), y el **alcance** son
+**todos los modelos invocables ahora mismo a través de este host**: el `ctx.llm` oficial
+(LlmRuntime) enumera los modelos publicados por cada plataforma, así que cada activación
+o desactivación en «Plataformas y modelos» se refleja fielmente.
 
 > ⚠️ **Declaración de alcance (impresa en el panel, no escondida)**: la clasificación solo
 > responde «qué puntuación tiene este modelo», **no** «tiene usted derecho a llamarlo».
+
+`rankScope` admite otros dos valores: `used` clasifica solo los modelos que aparecen de
+verdad en sus registros de sesión (incluidas llamadas históricas de modelos ya en desuso),
+y `all` clasifica la clasificación pública entera. Si la enumeración del catálogo falla,
+el panel informa honestamente de «catálogo no disponible» y **nunca** retrocede en
+silencio a otro alcance.
 
 ### Leaderboard cache
 
@@ -117,7 +127,7 @@ usando la última clasificación correcta y el panel lo indica.
 | `sessionsDir` | `''` | Raíz de los registros; vacío significa `$DSH_HOME/sessions` |
 | `usageCacheSeconds` | `30` | Caché de resultados de escaneo |
 | `rankCacheHours` | `6` | Caché de la clasificación, en horas |
-| `rankScope` | `'used'` | `used` = solo los modelos usados; `all` = la clasificación entera |
+| `rankScope` | `'catalog'` | `catalog` = todos los modelos invocables del host (por defecto); `used` = solo los usados; `all` = la clasificación entera |
 
 ## Honest reporting
 
@@ -125,7 +135,7 @@ usando la última clasificación correcta y el panel lo indica.
 - **Sin adivinar**: un modelo sin entrada en la clasificación muestra «—», no 0; un
   denominador de cero muestra «—», no 0 %.
 - **Los escaneos incompletos lo dicen**: se marcan como «esta pasada no terminó».
-- **La clasificación solo lista los modelos que usted usó**.
+- **La clasificación solo lista los modelos invocables del host** (o, con `rankScope: used`, los que usted usó).
 
 ## Design trade-offs
 
@@ -136,7 +146,7 @@ usando la última clasificación correcta y el panel lo indica.
 | Nunca leer `totalTokens` | El campo antiguo no cuadra con la suma de los cuatro segmentos | Sumamos por segmentos |
 | Caché en memoria, sin SQLite | Los logs solo crecen; la memoria ya baja las actualizaciones a milisegundos | Un escaneo en frío tras reiniciar el host |
 | Puntuaciones de una API pública | Las capacidades deben ser **medidas por otros**, no estimadas | Requiere red; sin red se reutiliza la última instantánea |
-| Alcance = llamadas observadas | Misma base que la tarjeta de capacidad y sin depender de ningún otro plugin | Los modelos instalados pero nunca usados no aparecen |
+| Alcance = catálogo invocable del host | Responde «lo que puedo llamar ahora» y sigue cada cambio en Plataformas y modelos | Requiere el servicio LlmRuntime del host; sin él el panel informa honestamente |
 
 ## Licence
 

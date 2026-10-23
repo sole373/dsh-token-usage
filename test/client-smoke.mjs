@@ -142,18 +142,32 @@ const rankDoc = {
   source: 'https://openrouter.ai/api/v1/models',
   stale: false,
   error: null,
-  availability: 'local-session-logs',
-  availabilityNote: { zh: '只统计本机会话日志里真实出现过的模型。', en: 'Local session logs only.' },
-  localCatalog: { scope: 'used', count: 2, note: { zh: '收录范围：实测用过的模型。', en: 'Scope: actually used models.' } },
-  counts: { local: 4, matched: 2, unmatched: 2, scored: 2 },
+  availability: 'callable-catalog',
+  availabilityNote: {
+    zh: '进榜的模型 = 宿主当前可调用的全部模型（各平台已启用的模型目录，随「平台与模型」的启用情况变化）。',
+    en: 'Ranked models = every model currently callable through this host.',
+  },
+  localCatalog: { scope: 'catalog', count: 4, note: { zh: '收录范围：宿主可调用的全部模型。', en: 'Scope: every model callable through this host.' } },
+  counts: { local: 4, matched: 4, merged: 2, unmatched: 0, scored: 2 },
   unmatched: [],
   entries: [
-    { provider: 'workbuddy', id: 'deepseek-v4.1-flash', name: 'deepseek-v4.1-flash', multiplier: 0.34, matchKind: 'exact', label: 'DeepSeek V4.1 Flash', intel: 62.5, coding: 58.1, agentic: 60.2, codingArena: null, ctx: 128000, price: 0.28, image: false },
-    { provider: 'trae', id: 'kimi-k3', name: 'kimi-k3', multiplier: 1.83, matchKind: 'prefix', label: 'Kimi K3', intel: 71.2, coding: 69.8, agentic: 70.1, codingArena: null, ctx: 262144, price: 1.2, image: true },
+    {
+      name: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', multiplier: 0.34,
+      providers: [
+        { provider: 'workbuddy', id: 'deepseek-v4.1-flash', matchKind: 'exact' },
+        { provider: 'trae', id: 'deepseek-v4.1-flash', matchKind: 'exact' },
+      ],
+      intel: 62.5, coding: 58.1, agentic: 60.2, codingArena: null, ctx: 128000, price: 0.28, image: false,
+    },
+    {
+      name: 'kimi-k3', label: 'Kimi K3', multiplier: 1.83,
+      providers: [{ provider: 'trae', id: 'kimi-k3', matchKind: 'prefix' }],
+      intel: 71.2, coding: 69.8, agentic: 70.1, codingArena: null, ctx: 262144, price: 1.2, image: true,
+    },
   ],
   tasks: [
-    { id: 'coding', zhLabel: '写代码', enLabel: 'Coding', zhRule: '按编码指数降序', enRule: 'by coding index', metric: 'index', rows: [{ provider: 'trae', id: 'kimi-k3', name: 'kimi-k3', value: 69.8 }] },
-    { id: 'longctx', zhLabel: '长文档', enLabel: 'Long context', zhRule: '按上下文窗口降序', enRule: 'by context window', metric: 'tokens', rows: [{ provider: 'trae', id: 'kimi-k3', name: 'kimi-k3', value: 262144 }] },
+    { id: 'coding', zhLabel: '写代码', enLabel: 'Coding', zhRule: '按编码指数降序', enRule: 'by coding index', metric: 'index', rows: [{ name: 'kimi-k3', providers: [{ provider: 'trae', matchKind: 'prefix' }], value: 69.8 }] },
+    { id: 'longctx', zhLabel: '长文档', enLabel: 'Long context', zhRule: '按上下文窗口降序', enRule: 'by context window', metric: 'tokens', rows: [{ name: 'kimi-k3', providers: [{ provider: 'trae', matchKind: 'prefix' }], value: 262144 }] },
   ],
 }
 
@@ -344,11 +358,29 @@ if (process.env.DUMP_FRAME) {
   const { writeFileSync } = await import('node:fs')
   writeFileSync(process.env.DUMP_FRAME, secondFrame)
 }
-for (const needle of ['累计消耗', '8.72亿', '调用次数', '缓存命中率', 'tku-chart-bar', 'tku-donut', 'tku-rank-fill', '按来源明细', '未知来源', 'workbuddy', '模型权威排名', '按任务类型推荐', '写代码']) {
+for (const needle of ['累计消耗', '8.72亿', '调用次数', '缓存命中率', 'tku-chart-bar', 'tku-donut', 'tku-rank-fill', '按来源明细', '未知来源', 'workbuddy', '模型权威排名', '能力分数来自公开榜单', '进榜的模型 = 宿主当前可调用', '可调用模型', '可调用范围内', '按任务类型推荐', '写代码', '2 行', '消耗趋势', '30 天', '全部', '每日', 'WorkBuddy / TRAE', '合并为 2 个模型']) {
   if (!secondFrame.includes(needle)) {
     console.log('FRAME >>>', secondFrame.slice(0, 3000))
     throw new Error('rendered panel is missing: ' + needle)
   }
+}
+// 合并展示：多来源行渲染成「WorkBuddy / TRAE」（同名同分合并后的来源列），
+// 统计行如实说明「匹配 4 → 合并为 2」——行数与总榜行数必须能对上账。
+{
+  const mergedAt = secondFrame.indexOf('WorkBuddy / TRAE')
+  if (mergedAt < 0) throw new Error('merged provider cell missing')
+  const statAt = secondFrame.indexOf('合并为 2 个模型')
+  if (statAt < 0) throw new Error('merged count note missing from stats line')
+}
+// 时间窗选择器必须出现在趋势卡 aside 里（跟随 trendToggle 渲染），
+// 且头部不再渲染窗口按钮组（windowButtons 移走后 head 里只剩刷新按钮）。
+{
+  const trendAsideAt = secondFrame.indexOf('消耗趋势')
+  if (trendAsideAt < 0) throw new Error('trend card missing')
+  const windowAt = secondFrame.indexOf('30 天')
+  if (windowAt < 0) throw new Error('window selector missing from trend card aside')
+  // 「30 天」按钮必须出现在「消耗趋势」标题之后（同一张卡的 aside）
+  if (windowAt < trendAsideAt) throw new Error('window selector rendered outside trend card')
 }
 console.log('[8] second frame length =', secondFrame.length, 'OK, all markers present')
 console.log('[9] fetch calls =', JSON.stringify(calls))

@@ -23,6 +23,7 @@ import {
   lookupEntry,
   normalizeLeaderboardEntry,
   normalizeModelKey,
+  stripRateSuffix,
   taskRecommendations,
   uniqueEntries,
 } from '../lib/model-rank.js'
@@ -167,7 +168,7 @@ ok(byId.value.rows.some((r) => r.name === 'Weak') === false, '智能指数低于
 ok(byId.value.rows.some((r) => r.name === 'Blank') === false, '没有价格或没有指数的模型不进快而省榜')
 for (const task of tasks) {
   ok(task.zhRule.length > 0 && task.enRule.length > 0, `${task.id} 带可显示的中英规则说明`)
-  ok(task.rows.length <= 5, `${task.id} 最多 5 行`)
+  ok(task.rows.length >= 1, `${task.id} 至少有一条可推荐行`)
 }
 
 // 排序稳定性：并列时不该随机跳动
@@ -194,14 +195,108 @@ const rankDoc = buildRankDoc({
   source: 'https://example.invalid/models',
 })
 ok(rankDoc.ok === true, '成功文档 ok=true')
-ok(rankDoc.entries[0].id === 'glm-5.3', '总榜按智能指数降序（60 的在前）')
+ok(rankDoc.entries[0].name === 'glm-5.3', '总榜按智能指数降序（60 的在前）')
 ok(rankDoc.entries[0].multiplier === 0.78, '本机倍率原样带上')
-ok(rankDoc.entries[1].matchKind === 'prefix', '带日期的榜单名靠前缀命中并如实标注 matchKind')
+ok(rankDoc.entries[1].providers[0].matchKind === 'prefix', '带日期的榜单名靠前缀命中并如实标注 matchKind（合并后挪进行内 providers）')
 ok(rankDoc.counts.local === 3 && rankDoc.counts.matched === 2 && rankDoc.counts.unmatched === 1, '计数：3 条本机 / 2 条匹配 / 1 条未匹配')
 ok(rankDoc.counts.scored === 2, 'scored 只数有智能指数的')
 ok(rankDoc.unmatched[0].name === 'Nobody Knows', '未匹配的模型如实列出，供用户判断是不是榜单缺条目')
-ok(rankDoc.availability === 'client-catalog', '可用性口径写进文档')
-ok(/不按账号订阅过滤/.test(rankDoc.availabilityNote.zh) && /entitlement/.test(rankDoc.availabilityNote.en), '口径说明必须点明「进榜 ≠ 有权用」')
+
+// ---- 6b. stripRateSuffix：显示名剥掉客户端倍率/免费装饰 ---------------------
+// 匹配层 normalizeModelKey 早就剥倍率，但展示名此前原样带着 ` · x1.80`；
+// 榜单一经 catalog 口径全量收录，这些装饰就糊在每个模型名后面。
+ok(stripRateSuffix('Qwen3.8-Max · x1.80') === 'Qwen3.8-Max', '「 · x1.80」倍率装饰被剥掉')
+ok(stripRateSuffix('GLM-5.3-Flash · x0.06') === 'GLM-5.3-Flash', '「 · x0.06」小数倍率被剥掉')
+ok(stripRateSuffix('Kimi-K3 x1.62') === 'Kimi-K3', '空格分隔的「 x1.62」也被剥掉')
+ok(stripRateSuffix('DeepSeek-V4.1-Flash-1017 · 免费') === 'DeepSeek-V4.1-Flash-1017', '「 · 免费」促销标记被剥掉')
+ok(stripRateSuffix('DeepSeek-V4 · 免费）') === 'DeepSeek-V4', '「 · 免费）」带右括号尾巴也剥掉')
+ok(stripRateSuffix('DeepSeek-V4-Flash (Official)') === 'DeepSeek-V4-Flash (Official)', '括号注解是模型名的一部分，保留')
+ok(stripRateSuffix('GLM-5.3') === 'GLM-5.3', '干净名字原样返回')
+ok(stripRateSuffix('mimo-v2.6-flash') === 'mimo-v2.6-flash', '干净名字（带连字符点号）原样返回')
+ok(stripRateSuffix('') === '', '空串返回空串')
+ok(stripRateSuffix(42) === 42, '非字符串原样返回（不猜）')
+{
+  // 端到端：行名带倍率装饰时，entries 的显示名必须是剥过的，任务推荐同理。
+  const doc = buildRankDoc({
+    rows: [
+      { provider: 'qwenwork-cn', id: 'qwen3.8-max', name: 'Qwen3.8-Max · x1.80' },
+      { provider: 'lobsterai', id: 'glm-5.3', name: 'GLM-5.3-Flash · x0.06' },
+    ],
+    index: buildLeaderboardIndex({
+      data: [
+        { id: 'a/qwen3.8-max', name: 'Qwen3.8 Max', context_length: 128000, benchmarks: { artificial_analysis: { intelligence_index: 70, coding_index: 70 } } },
+        { id: 'b/glm-5.3', name: 'Z.ai: GLM 5.3', context_length: 200000, benchmarks: { artificial_analysis: { intelligence_index: 60, coding_index: 60 } } },
+      ],
+    }),
+    fetchedAt: Date.UTC(2026, 9, 19, 12, 0, 0),
+    source: 'https://example.invalid/models',
+  })
+  ok(doc.entries.every((e) => !/x\s*[0-9.]|免费/u.test(e.name)), '总榜显示名不带倍率/免费装饰')
+  ok(doc.tasks.every((t) => t.rows.every((r) => !/x\s*[0-9.]|免费/u.test(r.name))), '任务推荐显示名不带倍率/免费装饰')
+  ok(doc.entries.some((e) => e.name === 'Qwen3.8-Max'), '剥完倍率后是本机叫法而不是榜单 label')
+}
+// 调用方不注明口径时如实写 unspecified，并给一段不撒谎的占位说明——
+// 绝不假装自己知道收录范围是什么。
+ok(rankDoc.availability === 'unspecified', '调用方不注明口径时如实写 unspecified')
+ok(/unspecified/.test(rankDoc.availabilityNote.zh) && /unspecified/.test(rankDoc.availabilityNote.en), '占位口径说明必须明说「未注明」，不冒充任何一种范围')
+
+// 同名同分合并：同一榜单条目被多个 provider 重复命中只出一行，来源折进 providers。
+const mergedDoc = buildRankDoc({
+  rows: [
+    { provider: 'workbuddy', id: 'deepseek-v4.1-flash', name: 'deepseek-v4.1-flash', multiplier: 0.34 },
+    { provider: 'trae', id: 'DeepSeek V4.1 Flash', name: 'DeepSeek V4.1 Flash', multiplier: 0.34 },
+    { provider: 'siliconflow', id: 'ds-flash', name: 'deepseek-v4.1-flash' },
+    { provider: 'trae', id: 'glm-5.3', name: 'glm-5.3' },
+  ],
+  index: buildLeaderboardIndex({
+    data: [
+      { id: 'v/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash 1017', context_length: 128000, benchmarks: { artificial_analysis: { intelligence_index: 50 } } },
+      { id: 'z/glm-5.3', name: 'Z.ai: GLM 5.3', context_length: 200000, benchmarks: { artificial_analysis: { intelligence_index: 60 } } },
+    ],
+  }),
+  fetchedAt: Date.now(),
+  source: 'x',
+})
+ok(mergedDoc.entries.length === 2, '三条同分来源合并成一行（与 glm 合计共 2 行）')
+ok(mergedDoc.counts.matched === 4, 'matched 仍数本机匹配行（4 条），不因合并缩水')
+ok(mergedDoc.counts.merged === 2, 'merged 数合并后的模型数（2 个）')
+const flash = mergedDoc.entries.find((row) => row.intel === 50)
+ok(flash.providers.length === 3, '三个来源全部折进行内 providers')
+ok(flash.providers.map((item) => item.provider).join(',') === 'workbuddy,trae,siliconflow', '来源保持本机行序，不乱排')
+ok(flash.multiplier === null, '倍率各异（0.34/0.34/无）时不标单一倍率')
+const sameRate = buildRankDoc({
+  rows: [
+    { provider: 'a', id: 'x', name: 'deepseek-v4.1-flash', multiplier: 0.34 },
+    { provider: 'b', id: 'y', name: 'DeepSeek V4.1 Flash', multiplier: 0.34 },
+  ],
+  index: buildLeaderboardIndex({
+    data: [
+      { id: 'v/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash 1017', benchmarks: { artificial_analysis: { intelligence_index: 50 } } },
+    ],
+  }),
+  fetchedAt: Date.now(),
+  source: 'x',
+})
+ok(sameRate.entries.length === 1 && sameRate.entries[0].multiplier === 0.34, '全部来源同倍率时合并行标一个倍率')
+// 任务推荐吃合并后的条目：同一模型不再霸占一个任务的多个名次。
+const dupTasks = sameRate.entries[0]
+ok(dupTasks.providers.length === 2, '合并行在任务推荐里也只有一份（taskRecommendations 输入即 entries）')
+
+// 注明口径时原样透传：文案跟口径走，面板照实显示，不写死在页面里。
+const scoped = buildRankDoc({
+  rows: [{ provider: 'p', id: 'gpt-6-astra', name: 'GPT-6 Astra' }],
+  index: buildLeaderboardIndex({ data: [richRow] }),
+  fetchedAt: Date.now(),
+  source: 'x',
+  availability: 'callable-catalog',
+  availabilityNote: {
+    zh: '进榜的模型 = 宿主当前可调用的全部模型。',
+    en: 'Ranked models = every model currently callable through this host.',
+  },
+})
+ok(scoped.availability === 'callable-catalog', '口径标识原样透传给面板')
+ok(/可调用/.test(scoped.availabilityNote.zh) && /callable/.test(scoped.availabilityNote.en), '口径说明原样透传给面板')
+ok(scoped.counts.matched === 1 && scoped.counts.merged === 1, '透传示例里模型照常匹配（口径透传不影响对齐逻辑）')
 ok(rankDoc.fetchedAt === '2026-10-19T12:00:00.000Z', '抓取时间以 ISO 串返回')
 ok(rankDoc.stale === false && rankDoc.error === null, '非陈旧文档 stale=false、error=null')
 
@@ -220,8 +315,9 @@ const mixed = buildRankDoc({
   fetchedAt: Date.now(),
   source: 'x',
 })
-ok(mixed.entries[0].id === 'low' && mixed.entries[1].id === 'noindex', '有分数的在前，没分数的沉底（null 不当 0 用）')
+ok(mixed.entries[0].name === 'Low' && mixed.entries[1].name === 'No Index', '有分数的在前，没分数的沉底（null 不当 0 用）')
 ok(mixed.tasks[1].rows.length === 1, '只有一条有智能指数，推理榜就只有一行')
+ok(mixed.counts.merged === 2, 'mixed 示例的 merged 计数照常给出')
 
 // 行数上限
 const many = buildRankDoc({
@@ -236,8 +332,9 @@ const many = buildRankDoc({
   fetchedAt: Date.now(),
   source: 'x',
 })
-ok(many.entries.length === 12, '总榜最多 12 行')
-ok(many.counts.matched === 30, '计数统计的是全部匹配数，不受展示上限影响')
+ok(many.entries.length === 30, '总榜不截断：30 个匹配模型全部返回')
+ok(many.entries[0].name === 'Model 0' && many.entries[29].name === 'Model 29', '全量返回且保持智能指数降序')
+ok(many.counts.matched === 30 && many.counts.merged === 30, '计数统计的是全部匹配数（无重复时 merged 与 matched 相等），不受展示上限影响')
 
 // ---- 7. 缓存与陈旧回退（用假 fetch，不碰网络） ------------------------------
 const dir = await mkdtemp(join(tmpdir(), 'dsh-rank-'))
@@ -263,6 +360,7 @@ const first = await store.read({ rows })
 ok(first.ok === true && first.entries.length === 1, '首次读取拿到榜单并匹配上本机模型')
 ok(fetchCalls === 1, '首次读取确实发了一次请求')
 ok(first.entries[0].intel === 42, '匹配到的分数正确')
+ok(first.entries[0].providers.length === 1, '单来源行的 providers 数组照常给出')
 
 const second = await store.read({ rows })
 ok(second.ok === true && fetchCalls === 1, 'TTL 内第二次读取走内存，不再发请求')
@@ -320,6 +418,7 @@ ok(failed.ok === false && failed.status === 'leaderboard-unavailable', '从未�
 ok(/network down/.test(failed.detail), '失败原因带出来，面板才能说明为什么没有排名')
 ok(failed.entries.length === 0 && failed.tasks.length === 0, '失败文档不画空榜')
 ok(failed.counts.local === 1 && failed.unmatched.length === 1, '失败文档仍带本机清单与未匹配列表')
+ok(failed.counts.merged === 0, '失败文档的 merged 计数为 0（不画空榜）')
 ok(neverCalls === 1, '失败也只是一次请求，不重试风暴')
 
 // 并发读取串行化：同一时刻多个请求共用一次拉取
@@ -336,6 +435,20 @@ const slow = createModelRankStore({
 const [a, b, c] = await Promise.all([slow.read({ rows }), slow.read({ rows }), slow.read({ rows })])
 ok(slowCalls === 1, '三个并发读取只触发一次拉取（inflight 串行化）')
 ok(a.ok === true && b.ok === true && c.ok === true, '三个并发读取都拿到结果')
+
+// ---- 8. readAllRows：'all' 口径的「榜单全集」行 --------------------------------
+// 旧版在这里栽过跟头：'all' 用 read({ rows: [] }) 的产物当行，rows 空则交集永远
+// 为空，'all' 静默排出一张空榜。readAllRows 必须直接从快照索引取。
+const fullRows = await slow.readAllRows()
+ok(Array.isArray(fullRows) && fullRows.length === 1, 'readAllRows 从索引去重后给出全集行')
+ok(fullRows[0].name === 'Model A' && fullRows[0].provider === '', '全集行带榜单 label，provider 留空')
+const fullDoc = await slow.read({ force: false, rows: fullRows, availability: 'leaderboard' })
+ok(fullDoc.ok === true && fullDoc.counts.local === 1 && fullDoc.counts.matched === 1, '全集行回灌 buildRankDoc 能匹配上（不再是旧版那张静默空榜）')
+ok(fullDoc.availability === 'leaderboard', 'store.read 把调用方的口径透传进文档')
+await slow.readAllRows()
+ok(slowCalls === 1, 'TTL 内 readAllRows 与 read 共用同一份榜单快照，不重复拉取')
+const emptyAll = await never.readAllRows()
+ok(Array.isArray(emptyAll) && emptyAll.length === 0, '榜单从未拉到时 readAllRows 返回空（不编造全集，让上层如实报 leaderboard-unavailable）')
 
 ok(DEFAULT_RANK_TTL_MS === 6 * 60 * 60 * 1000, '默认 TTL 是 6 小时')
 

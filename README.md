@@ -4,8 +4,8 @@
 
 It scans **the host's own session logs**, groups the records by provider and model,
 and reports consumption trends, cache hit rates and per-model usage. It then lines
-up **the models you actually used** against a public capability leaderboard, so you
-can see which of them is the strongest.
+up **every model you can currently call** against a public capability leaderboard,
+so you can see which of them is the strongest.
 
 | Capability | Entry point |
 | --- | --- |
@@ -70,18 +70,24 @@ Click "Token usage" in the sidebar. From top to bottom the panel shows:
 
 1. **Summary figures** — total consumption / today / last 7 days / call count, plus
    cache hits, cache misses and the hit rate
-2. **Four charts** — consumption trend (bars, switchable between daily and
-   cumulative), by-provider breakdown (donut), top models by usage, and a capability
-   ranking of the models you actually used
+2. **Four charts** — consumption trend (bars; the time window — 7 / 30 / 90 days or
+   "all" — lives in this card's corner and affects only this chart, alongside the
+   daily / cumulative toggle), by-provider breakdown (donut), top models by usage,
+   and a capability ranking of the models you actually used
 3. **Source detail table** — per provider/model input, cache reads and writes,
    output, total, call count, hit rate, tokens per call and output share
-4. **Model leaderboard** — an overall ranking plus recommendations by task
-   (coding / reasoning / agentic / long context / vision / best value)
+4. **Model leaderboard** — an overall ranking (every scored model included; a model
+   callable through several platforms is merged into one row with all platforms listed
+   in the source column and the stats line noting "merged into N models"; 10 rows
+   shown by default, scroll inside the table for the rest, row count in the corner)
+   plus recommendations by task (coding / reasoning / agentic / long
+   context / vision / best value), five per task
 5. **Footer** — how many session files were scanned, how long it took, and whether
    the scan completed
 
-The time window can be 7 / 30 / 90 days or "all". "Refresh" forces a re-scan;
-everything else uses the cache.
+The time window selector sits in the trend card's corner and only affects the trend
+chart — summary figures, the donut, rankings and the detail table always cover the
+full history. "Refresh" forces a re-scan; everything else uses the cache.
 
 ### How the numbers are computed
 
@@ -117,18 +123,22 @@ The ranking draws on two sources, kept **strictly separate**:
 - **Capability scores** — a public leaderboard (OpenRouter's `/api/v1/models`, no
   auth required, carrying Artificial Analysis's intelligence / coding / agentic
   indices plus context length, price and input modalities)
-- **Scope** — the models that **actually appear** in your local session logs
-  (including historical calls of models you no longer use)
+- **Scope** — **every model callable through this host right now**: the official
+  `ctx.llm` (LlmRuntime) enumerates each registered provider's advertised models,
+  so every enable/disable you make in "Platforms & Models" is reflected faithfully
 
-So the board answers "of the models I have used, which one fits which task best".
+So the board answers "of the models I can call, which one fits which task best".
 
 > ⚠️ **Scope statement (printed on the panel, not hidden)**: the leaderboard only
 > answers "what is this model's capability score", **not "are you allowed to call
-> it"**. The scope comes from observed calls, not from an entitlement check — a
-> model appearing here does not mean your account may call it right now.
+> it"**. The callable catalog is the host's route roster, not an entitlement
+> check — a model appearing here does not mean your account still has quota for it.
 
-Set `rankScope` to `all` to rank the entire public leaderboard instead (a view of
-the whole world), but be aware that most of those models are not installed here.
+Two other `rankScope` values exist: `used` ranks only the models that **actually
+appear** in your local session logs (including historical calls of models you no
+longer use), and `all` ranks the entire public leaderboard (a view of the whole
+world). If catalog enumeration fails, the rank panel reports "catalog unavailable"
+honestly and **never** silently falls back to another scope.
 
 ### Leaderboard cache
 
@@ -147,7 +157,7 @@ keeps being used, and the panel says so.
 | `sessionsDir` | `''` | Session log root; empty means `$DSH_HOME/sessions` |
 | `usageCacheSeconds` | `30` | Cache lifetime for scan results; the panel's "Refresh" always bypasses it |
 | `rankCacheHours` | `6` | Leaderboard cache lifetime in hours |
-| `rankScope` | `'used'` | `used` = only models actually used; `all` = the whole leaderboard |
+| `rankScope` | `'catalog'` | `catalog` = every model callable through this host (default); `used` = only models actually used; `all` = the whole leaderboard |
 
 ---
 
@@ -161,8 +171,9 @@ keeps being used, and the panel says so.
   like "read zero".
 - **Incomplete scans say so**: a scan that hits its time budget is flagged as
   "this run did not finish", never passed off as complete.
-- **The board only lists models you actually used**: it answers "what did I call",
-  not "what exists in the world".
+- **The board only lists models callable through this host** (the default scope): it
+  answers "what can I call right now", not "what exists in the world"; with
+  `rankScope: used` it lists only the models you actually called.
 
 ---
 
@@ -175,7 +186,7 @@ keeps being used, and the panel says so.
 | Never read `totalTokens` | The old field is not guaranteed to match the four-segment sum | The four segments are summed separately |
 | In-memory cache, no SQLite | Logs only grow; the in-memory cache already brings routine refreshes down to single-digit milliseconds | One cold scan after a host restart; not shared across processes |
 | Public API for leaderboard scores | Capability scores must be **someone else's measurements**, not our own estimates | Requires network; offline we reuse the last snapshot and say so |
-| Scope = observed calls | Same basis as the capability card, and it depends on no other plugin | Models you installed but never called do not show up |
+| Scope = callable catalog | Answers "what can I call right now" and follows every Platforms & Models change | Depends on the host's LlmRuntime service; without it the panel reports "catalog unavailable" honestly |
 
 ---
 
