@@ -121,6 +121,7 @@ const usageDoc = {
   sources: [
     { provider: 'workbuddy', model: 'deepseek-v4.1-flash', label: 'WorkBuddy / deepseek-v4.1-flash', input: 12_000_000, output: 900_000, cacheRead: 267_000_000, cacheWrite: 0, total: 280_735_049, calls: 3101 },
     { provider: 'siliconflow', model: 'Qwen/Qwen3-235B', label: 'SiliconFlow / Qwen/Qwen3-235B', input: 5_000_000, output: 400_000, cacheRead: 0, cacheWrite: 0, total: 5_400_000, calls: 120 },
+    { provider: 'magpie', model: 'group/group', label: 'magpie / group/group', modelLabel: '高性能', input: 1_000_000, output: 80_000, cacheRead: 0, cacheWrite: 0, total: 1_080_000, calls: 33 },
     { provider: '', model: '', label: '内部 / 标题', input: 900, output: 300, cacheRead: 0, cacheWrite: 0, total: 1200, calls: 40 },
   ],
   providers: [
@@ -156,12 +157,16 @@ const rankDoc = {
       providers: [
         { provider: 'workbuddy', id: 'deepseek-v4.1-flash', matchKind: 'exact' },
         { provider: 'trae', id: 'deepseek-v4.1-flash', matchKind: 'exact' },
+        { provider: 'magpie-group', id: 'group/group', matchKind: 'exact', label: '高性能' },
       ],
       intel: 62.5, coding: 58.1, agentic: 60.2, codingArena: null, ctx: 128000, price: 0.28, image: false,
     },
     {
       name: 'kimi-k3', label: 'Kimi K3', multiplier: 1.83,
-      providers: [{ provider: 'trae', id: 'kimi-k3', matchKind: 'prefix' }],
+      providers: [
+        { provider: 'trae', id: 'kimi-k3', matchKind: 'prefix' },
+        { provider: 'magpie-auto', id: 'auto/GLM-5.3', matchKind: 'exact', multiplier: 0.79 },
+      ],
       intel: 71.2, coding: 69.8, agentic: 70.1, codingArena: null, ctx: 262144, price: 1.2, image: true,
     },
   ],
@@ -363,6 +368,11 @@ for (const needle of ['累计消耗', '8.72亿', '调用次数', '缓存命中�
     console.log('FRAME >>>', secondFrame.slice(0, 3000))
     throw new Error('rendered panel is missing: ' + needle)
   }
+}
+// 路由组命名：命名路由组用 label 显示真名（Magpie·高性能），不再瞎编「路由组」；
+// auto 的按模型自动路由显示「Magpie·自动路由」；用量明细里 group/* 的 modelLabel 顶上。
+for (const needle of ['高性能', 'Magpie·自动路由 0.79x', '高性能']) {
+  if (!secondFrame.includes(needle)) throw new Error('rendered panel is missing: ' + needle)
 }
 // 合并展示：多来源行渲染成「WorkBuddy / TRAE」（同名同分合并后的来源列），
 // 统计行如实说明「匹配 4 → 合并为 2」——行数与总榜行数必须能对上账。

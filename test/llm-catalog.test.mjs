@@ -142,4 +142,44 @@ ok(concurrent[0] === concurrent[1] && concurrent[1] === concurrent[2], '并发�
   ok(warnings.some((line) => line.includes('bad')), '失败的平台被 warn 点名')
 }
 
+// ---- 5. magpie 路由：来源改写成 magpie-<原始提供者> --------------------------
+// magpie 是本地路由器，它广告的模型大多从别家 agent 的订阅路由而来，id 第一段
+// 就是原始提供者；`auto/` 开头的是 magpie 自己的路由组，实际打到哪家不披露。
+{
+  const magpieRuntime = {
+    listProviders: () => [{ id: 'magpie' }, { id: 'zhipu' }],
+    async listModels(provider) {
+      if (provider === 'magpie') {
+        return [
+          { id: 'officeace/glm-5.3', name: 'glm-5.3 · x0.79 · routing group' },
+          { id: 'qoder/qfmodel', name: 'Qwen3.8-Flash · Qoder' },
+          { id: 'cline/reflection/beam-free', name: 'Beam (free) · Cline' },
+          { id: 'group/group', name: '高性能' }, // 命名路由组（真实组名）
+          { id: 'group/cheap-first', name: '纯免费' }, // 命名路由组（真实组名）
+          { id: 'auto/GLM-5.3', name: 'glm-5.3 · x0.79 · routing group' }, // 按模型的自动路由
+          { id: 'no-slash-id', name: 'Weird' }, // 没有 id 前缀的脏行：保持 magpie 原样
+        ]
+      }
+      return [{ id: 'glm-6-air', name: 'GLM-6-Air' }]
+    },
+  }
+  const magpieCatalog = createCallableCatalog({
+    resolveRuntime: () => magpieRuntime,
+    ttlMs: 30_000,
+    logger: { warn: () => {} },
+    now: () => fakeNow,
+  })
+  const magpieRows = await magpieCatalog.read()
+  const byId = Object.fromEntries(magpieRows.map((row) => [row.id, row.provider]))
+  ok(byId['officeace/glm-5.3'] === 'magpie-officeace', '来源改写：id 第一段 officeace → magpie-officeace')
+  ok(byId['qoder/qfmodel'] === 'magpie-qoder', '来源改写：qoder → magpie-qoder')
+  ok(byId['cline/reflection/beam-free'] === 'magpie-cline', '多级 id 只取第一段：cline/reflection/… → magpie-cline')
+  ok(byId['auto/GLM-5.3'] === 'magpie-auto', 'auto/ 按模型的自动路由标 magpie-auto，不猜真实上游')
+  ok(byId['group/group'] === 'magpie-group' && byId['group/cheap-first'] === 'magpie-group', '命名路由组标 magpie-group')
+  const groupRows = magpieRows.filter((row) => row.id.startsWith('group/'))
+  ok(groupRows.every((row) => row.groupName === row.name), '命名路由组把真名（纯免费 / 高性能）带进 groupName')
+  ok(byId['no-slash-id'] === 'magpie', 'id 没有 / 前缀的行保持 magpie 原样')
+  ok(magpieRows.some((row) => row.id === 'glm-6-air' && row.provider === 'zhipu'), '非 magpie 平台完全不受影响')
+}
+
 console.log(`\nllm-catalog: ${checks} passed, 0 failed`)

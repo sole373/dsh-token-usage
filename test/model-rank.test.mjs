@@ -23,6 +23,7 @@ import {
   lookupEntry,
   normalizeLeaderboardEntry,
   normalizeModelKey,
+  parseMultiplier,
   stripRateSuffix,
   taskRecommendations,
   uniqueEntries,
@@ -234,6 +235,97 @@ ok(stripRateSuffix(42) === 42, '非字符串原样返回（不猜）')
   ok(doc.entries.every((e) => !/x\s*[0-9.]|免费/u.test(e.name)), '总榜显示名不带倍率/免费装饰')
   ok(doc.tasks.every((t) => t.rows.every((r) => !/x\s*[0-9.]|免费/u.test(r.name))), '任务推荐显示名不带倍率/免费装饰')
   ok(doc.entries.some((e) => e.name === 'Qwen3.8-Max'), '剥完倍率后是本机叫法而不是榜单 label')
+}
+// ---- 6c. magpie 路由模型：多段装饰的名字要能对上榜单 ------------------------
+// magpie 广告的名字是 `glm-5.3 · x0.79 · routing group`、`Hy3 · WorkBuddy`、
+// `Beam (free) · Cline`：第一个中点之后全是路由器拼的装饰（倍率/路由组/渠道）。
+ok(normalizeModelKey('glm-5.3 · x0.79 · routing group') === 'glm53', 'magpie 多段装饰：归一键取第一个中点之前的真名')
+ok(normalizeModelKey('Hy3 · WorkBuddy AI') === 'hy3', 'magpie 渠道装饰段被切掉')
+ok(normalizeModelKey('Beam (free) · routing group') === 'beam', 'magpie 括号注解与装饰段同时剥掉')
+ok(normalizeModelKey('Nemotron 3.5 Lightning (free) · Cline') === 'nemotron35lightning', '渠道名 + 括号促销一并剥掉')
+ok(stripRateSuffix('glm-5.3 · x0.79 · routing group') === 'glm-5.3', 'magpie 显示名剥到只剩真名（倍率在中间也能剥）')
+ok(stripRateSuffix('Seed-2.1-Pro-0915 (Max) · Trae CN') === 'Seed-2.1-Pro-0915 (Max)', '渠道装饰剥掉，括号注解保留')
+{
+  // 端到端：magpie 行（多段装饰名 + 路由 id）能精确/前缀命中榜单条目；
+  // `auto/…` 路由 id 没有真名可用时靠 id 尾段命中。
+  const doc = buildRankDoc({
+    rows: [
+      { provider: 'magpie-officeace', id: 'officeace/glm-5.3', name: 'glm-5.3 · x0.79 · routing group' },
+      { provider: 'magpie', id: 'auto/deepseek-v4.1-flash', name: 'Deepseek-V4.1-Flash · routing group' },
+      { provider: 'magpie-trae-cn', id: 'trae-cn/Doubao-Seed-2.1-Pro-max', name: 'Seed-2.1-Pro-0915 (Max) · Trae CN' },
+    ],
+    index: buildLeaderboardIndex({
+      data: [
+        { id: 'z-ai/glm-5.3', name: 'Z.ai: GLM 5.3', benchmarks: { artificial_analysis: { intelligence_index: 60 } } },
+        { id: 'deepseek/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash 1017', benchmarks: { artificial_analysis: { intelligence_index: 50 } } },
+        { id: 'doubao/seed-2.1-pro-0915', name: 'Doubao Seed 2.1 Pro 0915', benchmarks: { artificial_analysis: { intelligence_index: 40 } } },
+      ],
+    }),
+    fetchedAt: Date.now(),
+    source: 'x',
+  })
+  ok(doc.counts.matched === 3 && doc.counts.unmatched === 0, '三条 magpie 行全部对上榜单')
+  ok(doc.entries[0].name === 'glm-5.3', 'glm 行显示名剥干净装饰')
+  ok(doc.entries[0].providers[0].provider === 'magpie-officeace', '来源记录改写后的 magpie-<partner>')
+  const ds = doc.entries.find((row) => row.intel === 50)
+  ok(ds !== undefined && ds.providers[0].matchKind === 'prefix', 'auto 路由行靠本机稳定名前缀命中带日期的榜单 id')
+  const seed = doc.entries.find((row) => row.intel === 40)
+  ok(seed !== undefined && seed.providers[0].matchKind === 'exact', 'Trae 的 Seed 行靠括号注解剥除后精确命中')
+  // 倍率只拼在名字里（宿主目录没有独立字段）：从名字解析出来，逐来源带上。
+  ok(doc.entries[0].providers[0].multiplier === 0.79, 'magpie 名字中段的「 · x0.79 ·」解析成来源倍率')
+  ok(doc.entries[0].multiplier === 0.79, '单来源时行级倍率同样带上（供「倍率」列显示）')
+  ok(ds.providers[0].multiplier === undefined, '名字里没有倍率的来源不硬标（undefined，不是 1）')
+}
+// ---- 6e. parseMultiplier：从名字里读倍率，读不到如实返回 null ---------------
+// 宿主目录（`ctx.llm` 的 `LlmModelInfo`）没有倍率字段，倍率只被拼在名字里：
+// 中点分段 `glm-5.3 · x0.79 · routing group` 与尾段 `Kimi-K3 x1.62` 两种形态。
+ok(parseMultiplier('glm-5.3 · x0.79 · routing group') === 0.79, '中点分段：取 x 段（后面还有路由组装饰）')
+ok(parseMultiplier('Qwen3.8-Max · x1.80') === 1.8, '中点分段：尾部倍率')
+ok(parseMultiplier('Kimi-K3 x1.62') === 1.62, '空格尾段倍率')
+ok(parseMultiplier('GLM-5.3-Flash · x0.06') === 0.06, '两位小数倍率')
+ok(parseMultiplier('DeepSeek-V4 · 免费）') === 0, '「 · 免费」解析成 0（免费档），不是 null')
+ok(parseMultiplier('GLM-5.3') === null, '干净名字返回 null')
+ok(parseMultiplier('Hy3 · WorkBuddy') === null, '只有渠道装饰没有倍率时返回 null')
+ok(parseMultiplier('Beam (free) · Cline') === null, '促销标记不算倍率')
+ok(parseMultiplier('mimo-v2.6-flash') === null, '名字里的连字符/点号不被误判')
+ok(parseMultiplier('box1.5') === null, '紧贴的 x 不被误判（前面必须有空白）')
+ok(parseMultiplier('') === null && parseMultiplier(null) === null && parseMultiplier(undefined) === null, '空值/非字符串返回 null')
+ok(parseMultiplier('x1.2 · foo') === 1.2, '倍率在最前面也能解析')
+// ---- 6d. lookupEntry 的 id 尾段候选：路由前缀不是模型名的一部分 --------------
+{
+  const idx = buildLeaderboardIndex({
+    data: [{ id: 'z-ai/glm-5.3', name: 'Z.ai: GLM 5.3', benchmarks: { artificial_analysis: { intelligence_index: 60 } } }],
+  })
+  ok(lookupEntry(idx, '', 'auto/GLM-5.3').matchKind === 'exact', 'name 为空时用 id 尾段（剥掉 auto/ 前缀）精确命中')
+  ok(lookupEntry(idx, '完全对不上', 'workbuddy/GLM-5.3').matchKind === 'exact', '名字对不上时 id 尾段兜底命中')
+  ok(lookupEntry(idx, '完全对不上', 'cline/reflection/beam-free').matchKind === 'none', 'id 尾段也匹配不上时如实报 none')
+}
+// ---- 6f. 命名路由组：用 llm-catalog 带来的真名（纯免费 / 高性能）当来源标签 ----
+// magpie `group/*` 在榜单上无条目（unmatched），但来源仍要带真名而不是通用的「路由组」。
+{
+  const doc = buildRankDoc({
+    rows: [
+      { provider: 'magpie-group', id: 'group/cheap-first', name: '纯免费', groupName: '纯免费' },
+      { provider: 'magpie-group', id: 'group/group', name: '高性能', groupName: '高性能' },
+    ],
+    index: buildLeaderboardIndex({ data: [] }),
+    fetchedAt: Date.now(),
+    source: 'x',
+  })
+  const cheap = doc.unmatched.find((u) => u.id === 'group/cheap-first')
+  ok(cheap !== undefined, 'group/* 无榜单条目，如实进 unmatched，不硬造分数')
+  const unmatchedHasName = doc.unmatched.some((u) => u.name === '高性能')
+  ok(unmatchedHasName, 'unmatched 行仍保留组真名（纯免费 / 高性能），不是裸 id')
+  // 若将来某个组真有榜单条目，来源标签会优先用组真名。
+  const doc2 = buildRankDoc({
+    rows: [{ provider: 'magpie-group', id: 'group/group', name: '高性能', groupName: '高性能' }],
+    index: buildLeaderboardIndex({
+      data: [{ id: 'magpie/group/group', name: 'Magpie High Performance', benchmarks: { artificial_analysis: { intelligence_index: 40 } } }],
+    }),
+    fetchedAt: Date.now(),
+    source: 'x',
+  })
+  ok(doc2.entries[0].providers[0].label === '高性能', '有榜单条目时来源标签优先用组真名而非 provider 推导')
 }
 // 调用方不注明口径时如实写 unspecified，并给一段不撒谎的占位说明——
 // 绝不假装自己知道收录范围是什么。
