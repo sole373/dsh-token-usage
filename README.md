@@ -80,8 +80,9 @@ Click "Token usage" in the sidebar. From top to bottom the panel shows:
    callable through several platforms is merged into one row with all platforms listed
    in the source column and the stats line noting "merged into N models"; 10 rows
    shown by default, scroll inside the table for the rest, row count in the corner)
-   plus recommendations by task (coding / reasoning / agentic / long
-   context / vision / best value), five per task
+   plus recommendations by task (coding / research / writing / slides /
+   data work / cheapest), every rankable model per task, scroll inside
+   the card
 5. **Footer** — how many session files were scanned, how long it took, and whether
    the scan completed
 

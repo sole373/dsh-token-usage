@@ -20,6 +20,7 @@ import {
   buildLeaderboardIndex,
   buildRankDoc,
   createModelRankStore,
+  effectivePrice,
   lookupEntry,
   normalizeLeaderboardEntry,
   normalizeModelKey,
@@ -155,29 +156,67 @@ const taskEntries = [
 ]
 const tasks = taskRecommendations(taskEntries)
 const byId = Object.fromEntries(tasks.map((t) => [t.id, t]))
-ok(tasks.length === 6, '六个任务类型各出一条')
-ok(byId.coding.rows[0].name === 'Coder', '写代码：编码指数最高的排第一')
-ok(byId.coding.rows[0].value === 90, '写代码展示的是用于排序的那个值')
+ok(tasks.length === 6, '六张任务卡（改代码/科研/写文本/做PPT/处理数据/省钱）')
+ok(
+  tasks.map((t) => t.id).join(',') === 'coding,research,writing,ppt,data,value',
+  '任务卡顺序固定：前五张就是常用场景，省钱排最后',
+)
+ok(byId.coding.rows[0].name === 'Coder', '改代码：编码指数最高的排第一')
+ok(byId.coding.rows[0].value === 90, '改代码展示的是用于排序的那个值')
 ok(byId.coding.rows.some((r) => r.name === 'Cheap'), '没有编码指数的模型靠智能指数兜底进榜（这是写死的规则）')
-ok(byId.coding.rows.some((r) => r.name === 'Blank') === false, '两个指数都没有的模型不进写代码榜')
-ok(byId.reasoning.rows[0].name === 'Strong', '推理：智能指数最高的排第一')
-ok(byId.agentic.rows[0].name === 'Strong', '智能体：agentic 指数最高的排第一（75 > 60）')
-ok(byId.longctx.rows[0].name === 'Coder', '长文档：上下文窗口最大的排第一（200000）')
-ok(byId.vision.rows.length === 1 && byId.vision.rows[0].name === 'Seer', '看图：只留支持图片输入的模型')
-ok(byId.value.rows[0].name === 'Cheap', '快而省：过智能门槛后最便宜的排第一（0.2 美元）')
-ok(byId.value.rows.some((r) => r.name === 'Weak') === false, '智能指数低于门槛的便宜模型不配叫「省」')
-ok(byId.value.rows.some((r) => r.name === 'Blank') === false, '没有价格或没有指数的模型不进快而省榜')
+ok(byId.coding.rows.some((r) => r.name === 'Blank') === false, '两个指数都没有的模型不进改代码榜')
+ok(byId.research.rows.length === 1 && byId.research.rows[0].name === 'Coder', '科研：只留上下文 ≥ 200000 的模型')
+ok(byId.writing.rows[0].name === 'Strong', '写文本：智能指数最高的排第一')
+ok(byId.ppt.rows.length === 1 && byId.ppt.rows[0].name === 'Seer', '做PPT：只留支持图片输入的模型')
+ok(byId.data.rows[0].name === 'Strong', '处理数据：agentic 指数最高的排第一（75 > 60）')
+ok(byId.value.rows[0].name === 'Weak', '省钱：不设能力门槛，裸价最低的排第一（0.05 美元）')
+ok(byId.value.rows.some((r) => r.name === 'Blank') === false, '没有价格的模型不进省钱榜')
+ok(byId.value.rows.length === 5, '省钱榜列全部有价格的模型，弱模型也照实列出')
 for (const task of tasks) {
   ok(task.zhRule.length > 0 && task.enRule.length > 0, `${task.id} 带可显示的中英规则说明`)
   ok(task.rows.length >= 1, `${task.id} 至少有一条可推荐行`)
 }
+
+// 有效价：折「最便宜的那条已知路由倍率」；倍率未知按 ×1；没价格就是 null
+ok(effectivePrice({ price: 2, providers: [] }) === 2, '倍率全未知时按 ×1，不假装更便宜')
+ok(effectivePrice({ price: 2 }) === 2, '连 providers 都没有（用量面板行）也按 ×1')
+ok(
+  Math.abs(effectivePrice({ price: 2, providers: [{ multiplier: 2.38 }, { multiplier: null }] }) - 4.76) < 1e-9,
+  '有倍率就折进去：2 × 2.38 = 4.76',
+)
+ok(
+  effectivePrice({ price: 2, providers: [{ multiplier: 2.38 }, { multiplier: 0.5 }] }) === 1,
+  '多路由取最便宜那条：2 × 0.5 = 1',
+)
+ok(effectivePrice({ price: 2, providers: [{ multiplier: 0 }] }) === 0, '倍率 0（免费路由）就是 0，不当成未知')
+ok(effectivePrice({ price: null }) === null, '没有价格返回 null，不进榜')
+ok(
+  taskRecommendations([{ name: 'Flip', intel: 30, coding: null, agentic: null, ctx: null, price: 0.1, image: false, key: 'flip', providers: [{ multiplier: 2.38 }] }])
+    .find((t) => t.id === 'value').rows[0].value === 0.1 * 2.38,
+  '省钱榜用的是折完倍率的有效价，不是裸价',
+)
 
 // 排序稳定性：并列时不该随机跳动
 const tie = taskRecommendations([
   { name: 'B', intel: 50, coding: null, agentic: null, ctx: null, price: null, image: false, key: 'b' },
   { name: 'A', intel: 50, coding: null, agentic: null, ctx: null, price: null, image: false, key: 'a' },
 ])
-ok(tie[1].rows[0].name === 'B', '同分时保持输入顺序（不引入随机性）')
+ok(
+  tie.find((t) => t.id === 'writing').rows[0].name === 'B',
+  '同分时保持输入顺序（不引入随机性）',
+)
+
+// 写文本：智能指数并列时，按有效价更便宜的在前，无价的垫底
+const tieCost = taskRecommendations([
+  { name: 'Pricey', intel: 50, coding: null, agentic: null, ctx: null, price: 2, image: false, key: 'pricey' },
+  { name: 'Cheap', intel: 50, coding: null, agentic: null, ctx: null, price: 0.2, image: false, key: 'cheap' },
+  { name: 'Unpriced', intel: 50, coding: null, agentic: null, ctx: null, price: null, image: false, key: 'unpriced' },
+  { name: 'CheaperViaRoute', intel: 50, coding: null, agentic: null, ctx: null, price: 2, image: false, key: 'cheaproute', providers: [{ multiplier: 0.01 }] },
+])
+ok(
+  tieCost.find((t) => t.id === 'writing').rows.map((r) => r.name).join(',') === 'CheaperViaRoute,Cheap,Pricey,Unpriced',
+  '写文本同分时按折后有效价升序，无价的排同分末尾（2×0.01 比裸价 0.2 还便宜）',
+)
 
 // ---- 6. buildRankDoc：排序、计数、口径说明 ----------------------------------
 const rankDoc = buildRankDoc({
@@ -408,7 +447,7 @@ const mixed = buildRankDoc({
   source: 'x',
 })
 ok(mixed.entries[0].name === 'Low' && mixed.entries[1].name === 'No Index', '有分数的在前，没分数的沉底（null 不当 0 用）')
-ok(mixed.tasks[1].rows.length === 1, '只有一条有智能指数，推理榜就只有一行')
+ok(mixed.tasks.find((t) => t.id === 'writing').rows.length === 1, '只有一条有智能指数，写文本榜就只有一行')
 ok(mixed.counts.merged === 2, 'mixed 示例的 merged 计数照常给出')
 
 // 行数上限
