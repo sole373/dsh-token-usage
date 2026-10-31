@@ -1,0 +1,80 @@
+name: release
+
+# 只在「打 tag 发版」时跑；平时改代码不触发。
+# 手动演练：Actions → release → Run workflow，勾 dry_run 只打包不上传。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '只打包不上传（演练用）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # npm provenance 需要
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取代码
+        uses: actions/checkout@v4
+
+      - name: 装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      # 本包零构建、测试只依赖 Node 内置模块，故不跑 npm install：
+      # 没有 lockfile，npm ci 会直接失败，装依赖纯属浪费时间。
+      - name: 跑全部测试
+        run: |
+          node test/model-rank.test.mjs
+          node test/llm-catalog.test.mjs
+          node test/usage-scan.test.mjs
+          node test/client-smoke.mjs
+
+      - name: 校验 tag 与 package.json 版本一致
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(node -p "require('./package.json').version")"
+          echo "tag=$tag  version=$ver"
+          if [ "$tag" != "$ver" ]; then
+            echo "::error::tag（v$tag）与 package.json 的版本（$ver）不一致，拒绝发布"
+            exit 1
+          fi
+
+      # 把「token 到期」这种事故变成一句话的诊断，而不是一个看不懂的 404。
+      - name: 预检 NPM_TOKEN
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error::仓库里没有 NPM_TOKEN secret（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${NODE_AUTH_TOKEN}" \
+            https://registry.npmjs.org/-/whoami)"
+          echo "whoami → HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::NPM_TOKEN 已失效或权限不足（HTTP $code）——去 npmjs.com 重新签发 granular token（Read and write + @sole373）后更新 secret"
+            exit 1
+          fi
+
+      - name: 发布到 npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            npm publish --access public --dry-run
+          else
+            npm publish --access public --provenance
+          fi
