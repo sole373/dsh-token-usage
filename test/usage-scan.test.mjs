@@ -7,7 +7,7 @@
 
 import { strict as assert } from 'node:assert'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createReadStream } from 'node:fs'
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib'
@@ -23,7 +23,10 @@ function ok(cond, message) {
 }
 
 // ---- 1. 帧切分：拿本机第一份真实日志做真值比对 -------------------------------
-const { homeDirForTest } = { homeDirForTest: process.env.USERPROFILE }
+// 跨平台取家目录：Windows 认 USERPROFILE，Linux/macOS 认 HOME，都取不到时用 os.homedir()。
+// 早先这里写死 process.env.USERPROFILE，GitHub Actions 的 ubuntu runner 上该变量为空，
+// join(undefined, ...) 让 readdir 抛 ERR_INVALID_ARG_TYPE，把整条 CI 发布链卡死。
+const homeDirForTest = process.env.USERPROFILE || process.env.HOME || homedir()
 const { readdir } = await import('node:fs/promises')
 
 /**
