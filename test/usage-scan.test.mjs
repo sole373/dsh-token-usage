@@ -223,4 +223,93 @@ try {
 // ---- 3. 日期键按本地时区切天 ------------------------------------------------
 ok(localDayKey(new Date(2026, 9, 19, 23, 30).getTime()) === '2026-10-19', '本地日切天不受 UTC 影响')
 
+// ---- 4. magpie 是本地路由器：按 model id 第一段拆成真实来源 -------------------
+{
+  const dir = await mkdtemp(join(tmpdir(), 'usage-magpie-'))
+  try {
+    const day = Date.UTC(2026, 9, 17, 4, 0, 0)
+    const rec = (type, time, data) => JSON.stringify({ type, time, data })
+    // group/auto 行带 responseModel（真实日志里有这个字段）；partner 行不带
+    const magpieRow = (model, total, responseModel) => {
+      const src = { provider: 'magpie', model }
+      if (responseModel) src.replayState = { response: { responseModel } }
+      return rec('assistant/message', day, {
+        usage: { inputTokens: total, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: total },
+        message: { source: src },
+      })
+    }
+    const file = join(dir, 'session.v4.jsonl')
+    await writeFile(
+      file,
+      [
+        magpieRow('qoder/qfmodel', 100),
+        // group 行：两个不同 responseModel 应拆成两行（按真实模型聚合）
+        magpieRow('group/cheap-first', 200, 'deepseek-v4.1-flash'),
+        magpieRow('group/group', 300, 'minimax-m3.1-flash'),
+        // 大小写归一：MiniMax-M3.1-Flash 应与 minimax-m3.1-flash 合并
+        magpieRow('group/group', 50, 'MiniMax-M3.1-Flash'),
+        magpieRow('auto/GLM-5.3', 40, 'glm-5.3'),
+        magpieRow('cline/cline-free/nemotron-3.5-super-vl', 5),
+        magpieRow('workbuddy-ai/hy3', 10),
+        magpieRow('officeace/xxx', 8),
+        magpieRow('raccoon/yyy', 6),
+        magpieRow('codearts/zzz', 9),
+        // 缺 responseModel 的 group 行：退回原始 model id
+        magpieRow('group/cheap-first', 10),
+        rec('assistant/message', day, {
+          usage: { inputTokens: 50, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 50 },
+          message: { source: { provider: 'freeroute', model: 'm' } },
+        }),
+      ].join('\n'),
+      'utf8',
+    )
+    const result = await scanSessionFiles([file])
+    const gotProviders = new Set([...result.bySource.keys()].map((k) => k.split('\u0000')[0]))
+    const want = ['magpie-qoder', 'magpie-group', 'magpie-auto', 'magpie-cline', 'magpie-workbuddy-ai', 'magpie-officeace', 'magpie-raccoon', 'magpie-codearts']
+    for (const p of want) ok(gotProviders.has(p), `magpie 行按 model 第一段拆分出 ${p}`)
+
+    // group 行按 responseModel 拆分：deepseek-v4.1-flash、minimax-m3.1-flash（合并大小写）、
+    // 缺 responseModel 的退回原始 id group/cheap-first，共 3 行
+    const groupRows = [...result.bySource.entries()].filter(([k]) => k.startsWith('magpie-group\u0000'))
+    ok(groupRows.length === 3, 'group 行按 responseModel 拆分：3 个不同模型')
+    const groupModels = groupRows.map(([k]) => k.split('\u0000')[1])
+    ok(groupModels.includes('deepseek-v4.1-flash'), 'group 行拆出 deepseek-v4.1-flash')
+    ok(groupModels.includes('minimax-m3.1-flash'), 'group 行拆出 minimax-m3.1-flash（小写归一）')
+    ok(groupModels.includes('group/cheap-first'), '缺 responseModel 的 group 行退回原始 model id')
+
+    // 大小写归一验证：MiniMax-M3.1-Flash(50) 合并进 minimax-m3.1-flash(300)，总 350
+    const mmRow = result.bySource.get('magpie-group\u0000minimax-m3.1-flash')
+    ok(mmRow && mmRow.total === 350, `MiniMax 大小写归一合并：total=350，实际 ${mmRow?.total}`)
+
+    // auto 行也按 responseModel 拆分
+    const autoRow = result.bySource.get('magpie-auto\u0000glm-5.3')
+    ok(autoRow && autoRow.total === 40, 'auto 行拆到真实模型 glm-5.3')
+
+    // groupName 透传：有 responseModel 的行 groupName 是原始 group id
+    const dsRow = result.bySource.get('magpie-group\u0000deepseek-v4.1-flash')
+    ok(dsRow && dsRow.groupName === 'group/cheap-first', 'groupName 透传原始 group id')
+
+    // 缺 responseModel 的行 groupName 为空
+    const fallbackRow = result.bySource.get('magpie-group\u0000group/cheap-first')
+    ok(fallbackRow && fallbackRow.groupName === '', '缺 responseModel 的行 groupName 为空')
+
+    // partner 行不受影响
+    const qoderRow = result.bySource.get('magpie-qoder\u0000qoder/qfmodel')
+    ok(qoderRow && qoderRow.total === 100, 'partner 行保持原始 model id')
+
+    const store = createUsageStore({ sessionsRoot: dir, ttlMs: 0 })
+    const doc = await store.read({ force: true, now: day + 3600_000 })
+    const providers = new Set(doc.providers.map((p) => p.provider))
+    for (const p of want) ok(providers.has(p), `来源分布表 doc.providers 含拆分来源 ${p}`)
+    ok(providers.has('freeroute'), '非 magpie 来源保持原 provider 不变')
+    ok(!providers.has('magpie'), '环形图不再出现裸 magpie 来源（已拆成路由来源）')
+
+    // groupName 透传到 sources
+    const srcDs = doc.sources.find((s) => s.provider === 'magpie-group' && s.model === 'deepseek-v4.1-flash')
+    ok(srcDs && srcDs.groupName === 'group/cheap-first', 'sources 透传 groupName 到前端')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
 console.log(`\n${checks} checks passed`)

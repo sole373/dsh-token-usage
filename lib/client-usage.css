@@ -31,11 +31,12 @@
 .tku-stat.good { border-color: var(--dsw-alias-state-success-primary, #2e9e5b); }
 
 /* ---- 卡片 ---- */
-/* 三张卡片（消耗趋势 / 来源分布 / 模型使用排行）要长得一样高，所以配合
+/* 三张卡片（消耗趋势 / 来源分布 / 模型用量排行）要长得一样高，所以配合
    .tku-ugrid 的 align-items: stretch：卡片撑满整行，卡片正文吃掉剩余高度。
    趋势图不必靠自然高度去凑——正文是 flex 容器，SVG 写死高度即可。 */
 .tku-ucard { border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: hidden; }
 .tku-ucard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tku-ucard-head-left { display: flex; align-items: center; gap: 8px; }
 .tku-ucard-title { margin: 0; font-size: 13px; font-weight: 600; }
 .tku-ucard-aside { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
 .tku-ucard-body { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
@@ -122,7 +123,7 @@
       ——默认从 140 收到 116，剩下的空余让自动外边距分给左右两侧，环就能再往左挪一点；
    2) 环 196 上下各多出 38px 的空白（卡高 272），补一组窄屏断点把它缩到 160，
       让整个 body 的宽和高一起收，中列从 492 降到 ~420。 */
-/* 一行四张卡。列宽按住 2:2.5:2.75:2.75 分，行高由 --tku-row-h 钉死：
+/* 一行四张卡。列宽按住 3:2.5:2.25:2.25 分（趋势图加宽、两张排行卡收窄），行高由 --tku-row-h 钉死：
    两张排行卡条目多，如果不钉高度，它们会把整行撑到上千像素，另两张跟着被拉长。
    钉死之后排行卡在内部滚动，四张卡永远等高。
 
@@ -138,13 +139,13 @@
    210px 时列表只剩 129px（4 条）。250px 是满足「露出 5 个」的下限附近，
    且环与趋势图都还放得下。
 
-   列宽 2:2:3:3 → 2:2.5:2.75:2.75：第二张（来源分布）原来只有 2fr，太窄了——
+    列宽 2:2:2.75:2.75 → 3:2.5:2.25:2.25：第一张（消耗趋势）加宽到 3fr、第三四张（两张排行卡）收窄到 2.25fr，第二张保持 2.5fr、环放大到 150px，省出的宽度让给趋势图：
    环 + 间隙 10 + 图例排不下时，flex-wrap 会把图例折到环下方
-   （看起来就是「图被压扁了」）。环缩到 120px 后并排所需宽度降到 250px，
-   1200px 起就能并排；1400px 以下靠窄屏断点把环缩到 100px，需求降到 230px。
+   （看起来就是「图被压扁了」）。环现在 180px，并排所需宽度约 410px，
+   1500px 起就能并排；1400px 以下靠窄屏断点把环缩到 150px。
    省下的宽度给了第三、四张（两张排行卡）：它们一行最少要名字 60 + 占比 44 +
    数值 40 + 间距 ≈ 156px，1300px 下 body 有 324px，仍远够用。 */
-.tku-ugrid { --tku-cols: minmax(0, 2fr) minmax(0, 2.5fr) minmax(0, 2.75fr) minmax(0, 2.75fr); --tku-row-h: 250px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
+.tku-ugrid { --tku-cols: minmax(0, 2.5fr) minmax(0, 2.25fr) minmax(0, 2.625fr) minmax(0, 2.625fr); --tku-row-h: 250px; position: relative; display: grid; grid-template-columns: var(--tku-cols); grid-auto-rows: var(--tku-row-h); gap: 12px; align-items: stretch; align-content: start; justify-content: start; }
 /* 窄屏：**明确折成 2×2**，不能用 repeat(auto-fit, minmax(300px, 1fr))。
    auto-fit 只保证「每列至少 300」，一行放几张是浏览器自己算的——982px 时它算出
    3 列，第四张卡被挤到第二行；而卡片是 align-items: stretch 拉满整行高的，
@@ -156,12 +157,12 @@
 @media (max-width: 1180px) { .tku-ugrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* 更窄（手机竖屏）时一列一张，别再挤成两列。 */
 @media (max-width: 620px) { .tku-ugrid { grid-template-columns: minmax(0, 1fr); } }
-/* 窄屏把环缩到 100：第二张的 body 宽度不够放下「环 + 图例」，图例会被折到环下方。
+/* 窄屏把环缩到 130：第二张的 body 宽度不够放下「环 + 图例」，图例会被折到环下方。
    环从 196 缩到 120、并排需求降到 250px 之后，1400px 以上都用大环；
-   只有 1400px 以下（body < 250px）才需要再缩一档到 100px，此时需求 230px，
+   只有 1400px 以下（body < 250px）才需要再缩一档到 130px，此时需求 230px，
    1200px 起就放得下。 */
 @media (max-width: 1400px) {
-  .tku-ugrid .tku-donut { width: 100px; height: 100px; }
+  .tku-ugrid .tku-donut { width: 150px; height: 150px; }
   .tku-ugrid .tku-legend { font-size: 11px; }
 }
 /* 中列的 max-content 由图例的 min-width 撑着（没有它，min-content 会取最长那个名字，
@@ -197,8 +198,15 @@
    150 → 130px：行高降到 210px 后 body 只剩 156px，130 放得下（余 26px）。
    坐标系与显示尺寸是解耦的（scaleX/scaleY 按 boxWidth/boxHeight 自洽反推），
    所以只改这里，文字仍会被拽回原形。 */
-.tku-chart { width: 100%; --tku-trend-h: 130px; }
+.tku-chart { width: 100%; --tku-trend-h: 170px; flex: 1 1 auto; display: flex; flex-direction: column; }
+.tku-chart-box { position: relative; width: 100%; margin-top: auto; }
 .tku-chart-svg { width: 100%; height: var(--tku-trend-h, 130px); display: block; overflow: visible; }
+/* 趋势图文字覆盖层：SVG 横向拉伸会把字拉胖（用户实测「字是扁的」），文字全部
+   走 HTML 原生渲染，用与 SVG viewBox 相同的百分比坐标贴位（box 与 SVG 同尺寸）。 */
+.tku-chart-text { position: absolute; inset: 0; pointer-events: none; }
+.tku-chart-tick { position: absolute; font-size: 11px; line-height: 1; white-space: nowrap; color: var(--dsw-alias-label-tertiary); transform: translateY(-50%); }
+.tku-chart-date { position: absolute; font-size: 11px; line-height: 1; white-space: nowrap; color: var(--dsw-alias-label-tertiary); transform: translateX(-50%); }
+.tku-chart-peak { position: absolute; font-size: 12px; line-height: 1; font-weight: 600; white-space: nowrap; color: var(--dsw-alias-label-secondary, #667); text-shadow: 0 0 3px var(--dsw-alias-bg-layer-2, #fff), 0 0 3px var(--dsw-alias-bg-layer-2, #fff), 0 0 3px var(--dsw-alias-bg-layer-2, #fff); }
 .tku-chart-grid { stroke: var(--dsw-alias-border-l2); stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
 .tku-chart-axis { fill: var(--dsw-alias-label-tertiary); font-size: 10px; }
 /* 峰值气泡：贴在最高那根柱子的顶上。字比刻度略粗，它是要看懂「最高多少」的那个数；
@@ -215,16 +223,16 @@
 /* body 是 flex 列：子项会被拉伸到整宽，wrap 必须显式 width:100%，
    否则按内容收缩（环 160 + 图例 150 就溢出）；再把图例按 170 的基准改窄，
    窄卡里两者才真能并排放下。 */
-.tku-donut-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-start; width: 100%; }
-/* 尺寸跟着 UsageDonut 里的 size 常量走（120）；和图例并排，图例在窄列里会自动折到环下方。 */
-.tku-donut { width: 120px; height: 120px; flex: 0 0 auto; margin-left: auto; }
+.tku-donut-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
+/* SVG viewBox 内部按 size=150 建几何、CSS 渲染放大到 180px（等比缩放，线条随之加粗）；图例在窄列里会自动折到环下方。 */
+.tku-donut { width: 180px; height: 180px; flex: 0 0 auto; }
 /* 卡片能被拖窄，而环形图是固定 120 的 flex 子项、拒绝收缩——窄卡时它会横向溢出，
    右边一大段弧正好被裁掉，看着像图没画完。拖进来时允许等比缩小。 */
 @media (min-width: 1181px) { .tku-ucard-body .tku-donut { max-width: 100%; height: auto; } }
 /* flex-basis 给 116 而不是原来的 140：max-content 列轨道是「图例的 max-content 宽度」
    说了算的，basis 越大中列越宽，环周围就空得越多。图例本身能缩（flex-shrink: 1），
    用 min-width: 164px 把图例的下限钉住（名字 + 数值 + 百分比一行放得下），避免列一紧就折成两行。 */
-.tku-legend { list-style: none; margin: 0 0 0 auto; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 0 1 auto; min-width: 120px; }
+.tku-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 0 1 auto; min-width: 120px; }
 /* 行内三段：色点、名字、数值+占比。名字吃掉多余宽度（数字列跟着靠右），另外两段不伸缩。 */
 .tku-legend li { display: flex; align-items: center; gap: 6px; font-size: 12px; width: 100%; min-width: 0; }
 .tku-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
@@ -319,7 +327,7 @@
 
    overscroll-behavior 用 auto 而非 contain：contain 会把滚动链锁死在本面板，
    滚到底时不再向外传递；auto 允许自然传递，外层若还能滚就接着滚。 */
-.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: auto; }
+.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: auto; padding-left: 16px; }
 /* 根元素的直接子元素一律不许被压扁（见上面那段注释）。 */
 .tku-root > * { flex-shrink: 0; }
 .tku-head { display: flex; flex-direction: column; gap: 4px; }
