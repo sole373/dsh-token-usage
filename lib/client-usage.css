@@ -173,6 +173,32 @@
 @media (min-width: 1181px) {
   .tku-ugrid .tku-legend { min-width: 110px; }
 }
+
+/* ---- 容器查询（layout9）：断点量「卡片行的真实宽度」，不再量浏览器窗口 ----
+   上面几条 @media 量的是视口。DSH 界面自带侧栏，插件容器比视口窄两三百 px：
+   25 寸屏（视口 1920）插件容器只有 ~1630，媒体查询一条都打不中，第二张卡 body
+   只剩 ~334px，环 180 + 图例 ~170 放不下，flex-wrap 把图例折到环下面。
+   容器查询（Chrome 105+）量 .tku-root 的内容盒，宿主侧栏多宽都算得准；
+   旧内核不支持 @container 时整块被忽略，自动回落到上面的媒体查询，不会更坏。
+   阈值按容器内容宽标定（.tku-root 有 padding-left:16px，条件对内容盒求值）：
+   ≤1700 缩环压图例（25 寸 ~1630 命中；27 寸容器更宽不命中，保持大环），
+   ≤1500 再缩一档，≤1180 折 2×2（与媒体查询同阈值，双保险）。
+   同时隐藏能力卡头的口径说明段（.tku-ucard-note-x），卡头一行放得下不折行。 */
+@container tku (max-width: 1700px) {
+  .tku-ugrid .tku-donut { width: 140px; height: 140px; }
+  /* 图例折行的判定基准是 flex-basis（auto=最长条目 max-content ~210px），
+     不是 min-width——环 140+10+210 超卡内宽照样折。basis 归 0 让它不参与折行，
+     由 grow 吃掉剩余宽度（封顶 178），名字列自身 ellipsis。 */
+  .tku-ugrid .tku-legend { flex: 1 1 0; min-width: 0; max-width: 178px; font-size: 11px; }
+  .tku-ugrid .tku-legend-pct { width: 36px; }
+  .tku-ugrid .tku-legend-val { margin-left: 6px; }
+  .tku-ucard-note-x { display: none; }
+}
+@container tku (max-width: 1500px) {
+  .tku-ugrid .tku-donut { width: 130px; height: 130px; }
+  .tku-ugrid .tku-legend { font-size: 11px; max-width: 168px; }
+}
+@container tku (max-width: 1180px) { .tku-ugrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* 分宽把手绝对定位骑在两张卡的 12px 缝上。
    为什么不用负边距：把手是 grid 里的普通子元素时，一旦列窄到放不下「把手 + 卡片最小宽度」，
    grid 会把它整个挤到下一行（用户实测：伸长的趋势图把它顶到了第三行）。
@@ -327,7 +353,7 @@
 
    overscroll-behavior 用 auto 而非 contain：contain 会把滚动链锁死在本面板，
    滚到底时不再向外传递；auto 允许自然传递，外层若还能滚就接着滚。 */
-.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: auto; padding-left: 16px; }
+.tku-root { display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: var(--dsw-alias-label-primary); flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: auto; padding-left: 16px; container: tku / inline-size; }
 /* 根元素的直接子元素一律不许被压扁（见上面那段注释）。 */
 .tku-root > * { flex-shrink: 0; }
 .tku-head { display: flex; flex-direction: column; gap: 4px; }
