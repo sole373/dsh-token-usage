@@ -5,6 +5,9 @@
 .tku-uhead { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
 .tku-uhead-text { display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0; }
 .tku-uhead-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* GitHub 引流徽章：说明行下方的小徽章，点进仓库首页能看到 Star 按钮。 */
+.tku-repo-star { display: inline-block; line-height: 0; width: fit-content; border-radius: 4px; }
+.tku-repo-star img { display: block; height: 20px; width: auto; }
 .tku-ufoot { padding-top: 4px; }
 /* 单行说明：面板头部的两段说明（来源说明 + 口径声明）合并后文字很长，
    不加这条它会按容器宽度折成三四行，把下面的内容整体往下推。

@@ -1,5 +1,7 @@
 # dsh-token-usage
 
+[![GitHub stars](https://img.shields.io/github/stars/sole373/dsh-token-usage?style=social)](https://github.com/sole373/dsh-token-usage/stargazers)
+
 > Análise de consumo de tokens e ranking de capacidade de modelos para o DeepSeek Harness — um plugin.
 
 [English](README.md) | [中文](README-zh.md) | [Español](README-es.md) | Português | [हिन्दी](README-hi.md)

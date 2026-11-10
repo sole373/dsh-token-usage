@@ -1,5 +1,7 @@
 # dsh-token-usage
 
+[![GitHub stars](https://img.shields.io/github/stars/sole373/dsh-token-usage?style=social)](https://github.com/sole373/dsh-token-usage/stargazers)
+
 > टोकन उपयोग का विश्लेषण और मॉडल क्षमता रैंकिंग — DeepSeek Harness के लिए एक प्लगइन।
 
 [English](README.md) | [中文](README-zh.md) | [Español](README-es.md) | [Português](README-pt.md) | हिन्दी

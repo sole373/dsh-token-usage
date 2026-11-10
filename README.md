@@ -1,5 +1,7 @@
 # dsh-token-usage
 
+[![GitHub stars](https://img.shields.io/github/stars/sole373/dsh-token-usage?style=social)](https://github.com/sole373/dsh-token-usage/stargazers)
+
 > Token usage analytics and a model capability leaderboard — a DeepSeek Harness plugin.
 
 It scans **the host's own session logs**, groups the records by provider and model,

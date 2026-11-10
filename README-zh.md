@@ -1,5 +1,7 @@
 # dsh-token-usage
 
+[![GitHub stars](https://img.shields.io/github/stars/sole373/dsh-token-usage?style=social)](https://github.com/sole373/dsh-token-usage/stargazers)
+
 > Token 用量统计与模型能力排名 —— DeepSeek Harness 插件。
 
 扫描 **DSH 自己写的会话日志**，按 provider 与模型归类，算出消耗趋势、缓存命中率
