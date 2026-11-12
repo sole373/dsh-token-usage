@@ -15,6 +15,11 @@ import { zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 import { decompressAll, frameBounds, localDayKey, scanSessionFiles } from '../lib/usage-scan.js'
 import { createUsageStore } from '../lib/usage-store.js'
 
+// 路由日志对账默认会去读本机 `~/.config/magpie/usage.jsonl`。测试必须可复现，
+// 所以统一指到一个不存在的路径（等价于「这台机器没装 magpie」）；要验证对账
+// 的场景（第 5 节）显式传 routeLogPath，不受这里影响。
+process.env.MAGPIE_USAGE_LOG = join(tmpdir(), 'no-such-magpie-usage.jsonl')
+
 let checks = 0
 function ok(cond, message) {
   checks += 1
@@ -307,6 +312,91 @@ ok(localDayKey(new Date(2026, 9, 19, 23, 30).getTime()) === '2026-10-19', '本�
     // groupName 透传到 sources
     const srcDs = doc.sources.find((s) => s.provider === 'magpie-group' && s.model === 'deepseek-v4.1-flash')
     ok(srcDs && srcDs.groupName === 'group/cheap-first', 'sources 透传 groupName 到前端')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+// ---- 5. 缺 responseModel 的 group/auto 行：用 magpie 路由日志对账到 served 模型 ----
+// 为什么需要：会话日志里 `group/group-4`、部分 `auto/*` 没有 responseModel，只剩路由 id，
+// 模型维度就会统计出一个「group-4」这种假模型。magpie 自己的日志逐行记了 req 与 served，
+// 用 req + in/out token + 时间窗就能把真正应答的模型找回来。
+{
+  const dir = await mkdtemp(join(tmpdir(), 'usage-magpie-route-'))
+  try {
+    const base = Date.UTC(2026, 10, 2, 6, 0, 0)
+    const at = (offsetMs) => base + offsetMs
+    const iso = (ms) => new Date(ms).toISOString()
+
+    const routeLog = join(dir, 'magpie-usage.jsonl')
+    await writeFile(
+      routeLog,
+      [
+        // 正常命中：DSH 落盘比 magpie 路由完成晚 5 秒
+        JSON.stringify({ route_id: 1, t: iso(at(0)), req: 'group/group-4', model: 'hy4flash-exp4', served: 'hy3', in: 1000, out: 20 }),
+        // magpie 内部把按模型的自动路由记成 group/auto-*，而 DSH 的 responseModel 就是这个路由 id
+        JSON.stringify({ route_id: 2, t: iso(at(60_000)), req: 'group/auto-hy4free', served: 'hy4-free', in: 2000, out: 30 }),
+        // auto/* 单测：候选 req 要能试出 group/auto/* 这一形态
+        JSON.stringify({ route_id: 3, t: iso(at(120_000)), req: 'group/auto/glm-5.3', served: 'glm-5.3-max', in: 3000, out: 40 }),
+        // 干扰行：同一 req 但 token 不同，不能拿来冒充
+        JSON.stringify({ route_id: 4, t: iso(at(180_000)), req: 'group/group-3', served: 'nvidia/nemotron-3.5-super-vl:free', in: 11, out: 12 }),
+        // 没有 route_id 的行（provider_test 之类）不参与对账
+        JSON.stringify({ t: iso(at(180_000)), req: 'group/group-3', served: 'none-should-match', in: 4000, out: 50 }),
+        '',
+      ].join('\n'),
+      'utf8',
+    )
+
+    const rec = (time, model, inTok, outTok, responseModel) => {
+      const source = { provider: 'magpie', model }
+      if (responseModel) source.replayState = { response: { responseModel } }
+      return JSON.stringify({
+        type: 'assistant/message',
+        time,
+        data: {
+          usage: { inputTokens: inTok, outputTokens: outTok, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: inTok + outTok },
+          message: { source },
+        },
+      })
+    }
+    const file = join(dir, 'session.v4.jsonl')
+    await writeFile(
+      file,
+      [
+        rec(at(5_000), 'group/group-4', 1000, 20), // 缺 responseModel → 对账到 hy3
+        rec(at(63_000), 'auto/hy4free', 2000, 30, 'group/auto-hy4free'), // responseModel 仍是路由 id → hy4-free
+        rec(at(123_000), 'auto/glm-5.3', 3000, 40), // auto/* → 试 group/auto/glm-5.3 → glm-5.3-max
+        rec(at(183_000), 'group/group-3', 4000, 50), // 只有无 route_id 的干扰行 → 保持原样
+        rec(at(183_000), 'group/cheap-first', 7777, 88), // 日志里没有这次调用 → 保持原样
+      ].join('\n'),
+      'utf8',
+    )
+
+    const joined = await scanSessionFiles([file], { routeLogPath: routeLog })
+    const row = (key) => joined.bySource.get(key)
+    const hy3 = row('magpie-group\u0000hy3')
+    ok(hy3?.total === 1020, `group/group-4 对账到 hy3（total=1020，实际 ${hy3?.total}）`)
+    ok(hy3?.groupName === 'group/group-4', '拆到真实模型后 groupName 仍记原始路由 id')
+    const hy4 = row('magpie-auto\u0000hy4-free')
+    ok(hy4?.total === 2030, `responseModel 是路由 id 时也解到 hy4-free（实际 ${hy4?.total}）`)
+    const glmMax = row('magpie-auto\u0000glm-5.3-max')
+    ok(glmMax?.total === 3040, `auto/* 用 group/auto/* 形态对上 glm-5.3-max（实际 ${glmMax?.total}）`)
+    ok(row('magpie-group\u0000group/group-3')?.total === 4050, 'token 对不上时保留原始路由 id，不冒认')
+    ok(row('magpie-group\u0000group/cheap-first')?.total === 7865, '日志里没有这次调用时保留原始路由 id')
+    ok(row('magpie-group\u0000none-should-match') === undefined, '没有 route_id 的行不参与对账')
+
+    // 按模型榜：store 透传 routeLogPath 后，应出现 hy3、不再出现 group-4
+    const store = createUsageStore({ sessionsRoot: dir, ttlMs: 0, routeLogPath: routeLog })
+    const doc = await store.read({ force: true, now: at(600_000) })
+    const byModel = new Map(doc.modelTotals.map((m) => [m.model, m]))
+    ok(byModel.has('hy3'), '按模型榜出现 hy3（拆到具体模型）')
+    ok(!byModel.has('group-4') && !byModel.has('group/group-4'), '按模型榜不再出现 group-4 这类路由 id')
+    ok(byModel.get('hy3')?.merged === true, '合并行带 merged 标记（前端不拼来源）')
+
+    // 关闭对账：退回原行为，路由 id 原样保留
+    const raw = await scanSessionFiles([file], { routeLogPath: null })
+    ok(raw.bySource.get('magpie-group\u0000group/group-4')?.total === 1020, 'routeLogPath:null 时退回原始路由 id')
+    ok(raw.bySource.get('magpie-auto\u0000hy4-free') === undefined, 'routeLogPath:null 时不出现 served 行')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
