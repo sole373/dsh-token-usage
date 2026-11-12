@@ -146,35 +146,91 @@ ok(prefixHit.matchKind === 'prefix', '带日期的榜单 id 靠前缀命中本�
 ok(prefixHit.entry.intel === 50, '取最短前缀（50 那个），不抢 -pro 的 90')
 
 // ---- 5. 任务推荐：规则可复算、过滤器生效、空数据不进榜 ----------------------
+// 六张卡各用不同的主尺子（综合=加权混合、编程=AA coding、科研=intel+长上下文、
+// 办公=办公类竞技场、多模态=模态广度+视觉得分、省钱=有效价）——这是对旧版
+// 「科研≡写文本 19 行逐行相同」的直接回归锁。
 const taskEntries = [
-  { name: 'Strong', intel: 80, coding: 70, agentic: 75, ctx: 100000, price: 5, image: false, key: 'strong' },
-  { name: 'Coder', intel: 60, coding: 90, agentic: 50, ctx: 200000, price: 2, image: false, key: 'coder' },
-  { name: 'Cheap', intel: 45, coding: null, agentic: null, ctx: 8000, price: 0.2, image: false, key: 'cheap' },
-  { name: 'Weak', intel: 10, coding: null, agentic: null, ctx: 4000, price: 0.05, image: false, key: 'weak' },
-  { name: 'Seer', intel: 55, coding: 40, agentic: 60, ctx: 128000, price: 1, image: true, key: 'seer' },
-  { name: 'Blank', intel: null, coding: null, agentic: null, ctx: null, price: null, image: false, key: 'blank' },
+  {
+    name: 'Strong', intel: 80, coding: 70, agentic: 75, ctx: 100000, price: 5,
+    image: false, video: false, audio: false, codingArena: null, arenaOffice: null, arenaVisual: null, key: 'strong',
+  },
+  {
+    name: 'Coder', intel: 60, coding: 90, agentic: 50, ctx: 200000, price: 2,
+    image: false, video: false, audio: false, codingArena: null, arenaOffice: null, arenaVisual: null, key: 'coder',
+  },
+  {
+    name: 'Cheap', intel: 45, coding: null, agentic: null, ctx: 8000, price: 0.2,
+    image: false, video: false, audio: false, codingArena: null, arenaOffice: null, arenaVisual: null, key: 'cheap',
+  },
+  {
+    name: 'Weak', intel: 10, coding: null, agentic: null, ctx: 4000, price: 0.05,
+    image: false, video: false, audio: false, codingArena: null, arenaOffice: null, arenaVisual: null, key: 'weak',
+  },
+  {
+    name: 'Seer', intel: 55, coding: 40, agentic: 60, ctx: 128000, price: 1,
+    image: true, video: false, audio: false, codingArena: 1200, arenaOffice: null, arenaVisual: null, key: 'seer',
+  },
+  {
+    name: 'Blank', intel: null, coding: null, agentic: null, ctx: null, price: null,
+    image: false, video: false, audio: false, codingArena: null, arenaOffice: null, arenaVisual: null, key: 'blank',
+  },
+  {
+    // 办公/多模态 fixture：办公 ELO 1250、图片+视频+音频全开、视觉 ELO 1100。
+    name: 'OfficeHero', intel: 40, coding: 30, agentic: null, ctx: 64000, price: 3,
+    image: true, video: true, audio: true, codingArena: 1300, arenaOffice: 1250, arenaVisual: 1100, key: 'officehero',
+  },
+  {
+    // 长上下文 fixture：专为科研卡准备（≥1M 门槛）。
+    name: 'Longmind', intel: 65, coding: 55, agentic: null, ctx: 2_000_000, price: 4,
+    image: false, video: false, audio: false, codingArena: null, arenaOffice: null, arenaVisual: null, key: 'longmind',
+  },
 ]
 const tasks = taskRecommendations(taskEntries)
 const byId = Object.fromEntries(tasks.map((t) => [t.id, t]))
-ok(tasks.length === 6, '六张任务卡（改代码/科研/写文本/做PPT/处理数据/省钱）')
+ok(tasks.length === 6, '六张任务卡（综合/编程/科研/办公/多模态/省钱）')
 ok(
-  tasks.map((t) => t.id).join(',') === 'coding,research,writing,ppt,data,value',
-  '任务卡顺序固定：前五张就是常用场景，省钱排最后',
+  tasks.map((t) => t.id).join(',') === 'overall,coding,research,office,multimodal,value',
+  '任务卡顺序固定：综合在前、省钱排最后',
 )
-ok(byId.coding.rows[0].name === 'Coder', '改代码：编码指数最高的排第一')
-ok(byId.coding.rows[0].value === 90, '改代码展示的是用于排序的那个值')
-ok(byId.coding.rows.some((r) => r.name === 'Cheap'), '没有编码指数的模型靠智能指数兜底进榜（这是写死的规则）')
-ok(byId.coding.rows.some((r) => r.name === 'Blank') === false, '两个指数都没有的模型不进改代码榜')
-ok(byId.research.rows.length === 1 && byId.research.rows[0].name === 'Coder', '科研：只留上下文 ≥ 200000 的模型')
-ok(byId.writing.rows[0].name === 'Strong', '写文本：智能指数最高的排第一')
-ok(byId.ppt.rows.length === 1 && byId.ppt.rows[0].name === 'Seer', '做PPT：只留支持图片输入的模型')
-ok(byId.data.rows[0].name === 'Strong', '处理数据：agentic 指数最高的排第一（75 > 60）')
+ok(byId.overall.rows.length > 0, '综合卡有行（加权混合至少出一个分）')
+ok(
+  byId.overall.rows.some((r) => r.name === 'Blank') === false,
+  '一个信号都没有的模型不进综合榜',
+)
+ok(
+  byId.overall.rows.some((r) => r.name === 'Cheap'),
+  '缺多数信号但有 intel 的模型仍进综合榜（缺失项重新归一，不当 0）',
+)
+ok(byId.coding.rows[0].name === 'Coder', '编程：AA 编码指数最高的排第一')
+ok(byId.coding.rows[0].value === 90, '编程展示的是用于排序的那个值')
+ok(
+  byId.coding.rows.some((r) => r.name === 'Cheap') === false,
+  '没有 AA 编码指数的模型不进编程榜（严格口径，不用 arena 冒充）',
+)
+ok(byId.coding.rows.some((r) => r.name === 'Blank') === false, '两个指数都没有的模型不进编程榜')
+ok(
+  byId.research.rows.length === 1 && byId.research.rows[0].name === 'Longmind',
+  '科研：只留上下文 ≥ 1,000,000 的模型（2M 的 Longmind 进榜，其余全落选）',
+)
+ok(byId.office.rows[0].name === 'OfficeHero', '办公：办公类竞技场 ELO 最高的排第一')
+ok(
+  byId.office.rows.length === 1 && byId.office.rows[0].value === 1250,
+  '办公榜只有办公类有成绩的模型（codingArena 1300 不冒充办公分）',
+)
+ok(byId.multimodal.rows[0].name === 'OfficeHero', '多模态：模态广度（视频+音频）最高的排第一')
+ok(
+  byId.multimodal.rows.every((r) => r.image === true),
+  '多模态榜只收支持图片输入的模型',
+)
+ok(
+  byId.multimodal.rows.some((r) => r.name === 'OfficeHero' && r.value > 10000),
+  '多模态排序值把模态广度放在视觉得分之前（广度×10000）',
+)
 ok(byId.value.rows[0].name === 'Weak', '省钱：不设能力门槛，裸价最低的排第一（0.05 美元）')
 ok(byId.value.rows.some((r) => r.name === 'Blank') === false, '没有价格的模型不进省钱榜')
-ok(byId.value.rows.length === 5, '省钱榜列全部有价格的模型，弱模型也照实列出')
+ok(byId.value.rows.length === 7, '省钱榜列全部有价格的模型，弱模型也照实列出')
 for (const task of tasks) {
   ok(task.zhRule.length > 0 && task.enRule.length > 0, `${task.id} 带可显示的中英规则说明`)
-  ok(task.rows.length >= 1, `${task.id} 至少有一条可推荐行`)
 }
 
 // 有效价：折「最便宜的那条已知路由倍率」；倍率未知按 ×1；没价格就是 null
@@ -198,15 +254,15 @@ ok(
 
 // 排序稳定性：并列时不该随机跳动
 const tie = taskRecommendations([
-  { name: 'B', intel: 50, coding: null, agentic: null, ctx: null, price: null, image: false, key: 'b' },
-  { name: 'A', intel: 50, coding: null, agentic: null, ctx: null, price: null, image: false, key: 'a' },
+  { name: 'B', intel: 50, coding: null, agentic: null, ctx: 2_000_000, price: null, image: false, key: 'b' },
+  { name: 'A', intel: 50, coding: null, agentic: null, ctx: 2_000_000, price: null, image: false, key: 'a' },
 ])
 ok(
-  tie.find((t) => t.id === 'writing').rows[0].name === 'B',
+  tie.find((t) => t.id === 'research').rows[0].name === 'B',
   '同分时保持输入顺序（不引入随机性）',
 )
 
-// 写文本：智能指数并列时，按有效价更便宜的在前，无价的垫底
+// 省钱：同价并列时按智能指数高的在前（显式 tiebreak，不再依赖入口顺序）
 const tieCost = taskRecommendations([
   { name: 'Pricey', intel: 50, coding: null, agentic: null, ctx: null, price: 2, image: false, key: 'pricey' },
   { name: 'Cheap', intel: 50, coding: null, agentic: null, ctx: null, price: 0.2, image: false, key: 'cheap' },
@@ -214,8 +270,8 @@ const tieCost = taskRecommendations([
   { name: 'CheaperViaRoute', intel: 50, coding: null, agentic: null, ctx: null, price: 2, image: false, key: 'cheaproute', providers: [{ multiplier: 0.01 }] },
 ])
 ok(
-  tieCost.find((t) => t.id === 'writing').rows.map((r) => r.name).join(',') === 'CheaperViaRoute,Cheap,Pricey,Unpriced',
-  '写文本同分时按折后有效价升序，无价的排同分末尾（2×0.01 比裸价 0.2 还便宜）',
+  tieCost.find((t) => t.id === 'value').rows.map((r) => r.name).join(',') === 'CheaperViaRoute,Cheap,Pricey',
+  '省钱榜按折后有效价升序（2×0.01 比裸价 0.2 还便宜；无价的 Unpriced 不入榜）',
 )
 
 // ---- 6. buildRankDoc：排序、计数、口径说明 ----------------------------------
@@ -447,7 +503,8 @@ const mixed = buildRankDoc({
   source: 'x',
 })
 ok(mixed.entries[0].name === 'Low' && mixed.entries[1].name === 'No Index', '有分数的在前，没分数的沉底（null 不当 0 用）')
-ok(mixed.tasks.find((t) => t.id === 'writing').rows.length === 1, '只有一条有智能指数，写文本榜就只有一行')
+ok(mixed.tasks.find((t) => t.id === 'research').rows.length === 0, '无 ctx 数据时科研榜如实为空（ctx 是硬门槛，不因缺数据而放宽）')
+ok(mixed.tasks.find((t) => t.id === 'overall').rows.length === 1, '只有一条有智能指数，综合榜就只有一行')
 ok(mixed.counts.merged === 2, 'mixed 示例的 merged 计数照常给出')
 
 // 行数上限
